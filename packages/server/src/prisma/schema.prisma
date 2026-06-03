@@ -1,0 +1,223 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  admin
+  user
+}
+
+enum CourseStatus {
+  active
+  archived
+  completed
+}
+
+enum PlanStatus {
+  active
+  paused
+  completed
+  delayed
+}
+
+enum PlanItemStatus {
+  pending
+  completed
+  skipped
+}
+
+enum NotificationType {
+  reminder
+  system
+  achievement
+}
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  nickname     String   @db.VarChar(50)
+  avatarUrl    String?  @map("avatar_url")
+  role         UserRole @default(user)
+  timezone     String   @default("Asia/Shanghai") @db.VarChar(50)
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  courses             Course[]
+  learningPlans       LearningPlan[]
+  checkIns            CheckIn[]
+  wrongAnswers        WrongAnswer[]
+  notes               Note[]
+  aiReviewSuggestions AIReviewSuggestion[]
+  notifications       Notification[]
+  systemConfigUpdates SystemConfig[]
+
+  @@map("users")
+}
+
+model Course {
+  id          String       @id @default(uuid())
+  userId      String       @map("user_id")
+  title       String       @db.VarChar(200)
+  category    String       @db.VarChar(50)
+  description String       @default("")
+  status      CourseStatus @default(active)
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
+
+  user                User                 @relation(fields: [userId], references: [id])
+  learningPlans       LearningPlan[]
+  wrongAnswers        WrongAnswer[]
+  notes               Note[]
+  aiReviewSuggestions AIReviewSuggestion[]
+
+  @@index([userId, status])
+  @@map("courses")
+}
+
+model LearningPlan {
+  id              String     @id @default(uuid())
+  userId          String     @map("user_id")
+  courseId         String     @map("course_id")
+  title           String     @db.VarChar(200)
+  startDate       DateTime   @map("start_date") @db.Date
+  endDate         DateTime   @map("end_date") @db.Date
+  status          PlanStatus @default(active)
+  originalEndDate DateTime?  @map("original_end_date") @db.Date
+  createdAt       DateTime   @default(now()) @map("created_at")
+  updatedAt       DateTime   @updatedAt @map("updated_at")
+
+  user     User       @relation(fields: [userId], references: [id])
+  course   Course     @relation(fields: [courseId], references: [id])
+  items    PlanItem[]
+
+  @@index([userId, status])
+  @@index([courseId])
+  @@map("learning_plans")
+}
+
+model PlanItem {
+  id            String         @id @default(uuid())
+  planId        String         @map("plan_id")
+  title         String         @db.VarChar(200)
+  scheduledDate DateTime       @map("scheduled_date") @db.Date
+  originalDate  DateTime?      @map("original_date") @db.Date
+  sortOrder     Int            @default(0) @map("sort_order")
+  status        PlanItemStatus @default(pending)
+  createdAt     DateTime       @default(now()) @map("created_at")
+  updatedAt     DateTime       @updatedAt @map("updated_at")
+
+  plan     LearningPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  checkIns CheckIn[]
+  notes    Note[]
+
+  @@index([planId, scheduledDate])
+  @@index([planId, status])
+  @@map("plan_items")
+}
+
+model CheckIn {
+  id              String   @id @default(uuid())
+  userId          String   @map("user_id")
+  planItemId      String   @map("plan_item_id")
+  checkInDate     DateTime @map("check_in_date") @db.Date
+  durationMinutes Int?     @map("duration_minutes")
+  note            String?
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  user     User     @relation(fields: [userId], references: [id])
+  planItem PlanItem @relation(fields: [planItemId], references: [id])
+
+  @@unique([userId, planItemId, checkInDate])
+  @@index([userId, checkInDate])
+  @@map("check_ins")
+}
+
+model WrongAnswer {
+  id             String    @id @default(uuid())
+  userId         String    @map("user_id")
+  courseId        String    @map("course_id")
+  question       String
+  wrongAnswer    String    @map("wrong_answer")
+  correctAnswer  String    @map("correct_answer")
+  explanation    String?
+  tags           String[]  @default([])
+  reviewCount    Int       @default(0) @map("review_count")
+  nextReviewDate DateTime? @map("next_review_date") @db.Date
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  user   User   @relation(fields: [userId], references: [id])
+  course Course @relation(fields: [courseId], references: [id])
+
+  @@index([userId, courseId])
+  @@index([userId, nextReviewDate])
+  @@map("wrong_answers")
+}
+
+model Note {
+  id         String   @id @default(uuid())
+  userId     String   @map("user_id")
+  courseId    String?  @map("course_id")
+  planItemId String?  @map("plan_item_id")
+  title      String   @db.VarChar(200)
+  content    String   @default("")
+  tags       String[] @default([])
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  user     User      @relation(fields: [userId], references: [id])
+  course   Course?   @relation(fields: [courseId], references: [id])
+  planItem PlanItem? @relation(fields: [planItemId], references: [id])
+
+  @@index([userId, courseId])
+  @@map("notes")
+}
+
+model AIReviewSuggestion {
+  id                String   @id @default(uuid())
+  userId            String   @map("user_id")
+  courseId           String?  @map("course_id")
+  suggestionContent Json     @map("suggestion_content")
+  generatedAt       DateTime @default(now()) @map("generated_at")
+  accepted          Boolean  @default(false)
+
+  user   User    @relation(fields: [userId], references: [id])
+  course Course? @relation(fields: [courseId], references: [id])
+
+  @@index([userId])
+  @@map("ai_review_suggestions")
+}
+
+model Notification {
+  id           String           @id @default(uuid())
+  userId       String           @map("user_id")
+  type         NotificationType @default(system)
+  title        String           @db.VarChar(200)
+  content      String           @default("")
+  read         Boolean          @default(false)
+  scheduledFor DateTime?        @map("scheduled_for")
+  createdAt    DateTime         @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId, read])
+  @@index([scheduledFor])
+  @@map("notifications")
+}
+
+model SystemConfig {
+  key       String   @id @db.VarChar(100)
+  value     Json
+  updatedBy String   @map("updated_by")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  updater User @relation(fields: [updatedBy], references: [id])
+
+  @@map("system_configs")
+}

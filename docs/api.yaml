@@ -1,0 +1,665 @@
+openapi: 3.0.3
+info:
+  title: 学习计划管理平台 API
+  description: Personal Learning Plan Management Platform API
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:3000/api
+    description: Development server
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    ApiResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: object
+        error:
+          type: string
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        nickname:
+          type: string
+        role:
+          type: string
+          enum: [admin, user]
+        timezone:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+    Course:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        category:
+          type: string
+        description:
+          type: string
+        status:
+          type: string
+          enum: [active, archived, completed]
+        createdAt:
+          type: string
+          format: date-time
+    LearningPlan:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        courseId:
+          type: string
+          format: uuid
+        title:
+          type: string
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
+        status:
+          type: string
+          enum: [active, paused, completed, delayed]
+        originalEndDate:
+          type: string
+          format: date
+    PlanItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        scheduledDate:
+          type: string
+          format: date
+        originalDate:
+          type: string
+          format: date
+        status:
+          type: string
+          enum: [pending, completed, skipped]
+    CheckIn:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        planItemId:
+          type: string
+          format: uuid
+        checkInDate:
+          type: string
+          format: date
+        durationMinutes:
+          type: integer
+        note:
+          type: string
+    Error:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        error:
+          type: string
+
+paths:
+  /auth/register:
+    post:
+      tags: [Auth]
+      summary: Register new user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password, nickname]
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  minLength: 6
+                nickname:
+                  type: string
+      responses:
+        '201':
+          description: Registration successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      token:
+                        type: string
+                      refreshToken:
+                        type: string
+                      user:
+                        $ref: '#/components/schemas/User'
+        '409':
+          description: Email already registered
+
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                password:
+                  type: string
+      responses:
+        '200':
+          description: Login successful
+        '401':
+          description: Invalid credentials
+
+  /auth/refresh:
+    post:
+      tags: [Auth]
+      summary: Refresh token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                refreshToken:
+                  type: string
+      responses:
+        '200':
+          description: Token refreshed
+
+  /auth/me:
+    get:
+      tags: [Auth]
+      summary: Get current user
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Current user info
+
+  /courses:
+    get:
+      tags: [Courses]
+      summary: List courses
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [active, archived, completed]
+        - name: category
+          in: query
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Paginated course list
+    post:
+      tags: [Courses]
+      summary: Create course
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title, category]
+              properties:
+                title:
+                  type: string
+                category:
+                  type: string
+                description:
+                  type: string
+      responses:
+        '201':
+          description: Course created
+
+  /courses/{id}:
+    get:
+      tags: [Courses]
+      summary: Get course detail with progress
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Course detail
+        '404':
+          description: Not found
+    put:
+      tags: [Courses]
+      summary: Update course
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Course updated
+
+  /courses/{id}/archive:
+    put:
+      tags: [Courses]
+      summary: Archive course (preserves history)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Course archived
+
+  /plans:
+    get:
+      tags: [Plans]
+      summary: List learning plans
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: courseId
+          in: query
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Plan list
+    post:
+      tags: [Plans]
+      summary: Create plan with items
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [courseId, title, startDate, endDate, items]
+              properties:
+                courseId:
+                  type: string
+                title:
+                  type: string
+                startDate:
+                  type: string
+                  format: date
+                endDate:
+                  type: string
+                  format: date
+                items:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      title:
+                        type: string
+                      scheduledDate:
+                        type: string
+                        format: date
+      responses:
+        '201':
+          description: Plan created
+
+  /plans/{id}/delay:
+    post:
+      tags: [Plans]
+      summary: Handle plan delay
+      description: Marks overdue items as skipped, shifts future items forward
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Plan delayed successfully
+        '400':
+          description: No overdue items
+
+  /checkins:
+    post:
+      tags: [Check-ins]
+      summary: Create check-in
+      description: Returns 409 if already checked in for this item today
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [planItemId]
+              properties:
+                planItemId:
+                  type: string
+                durationMinutes:
+                  type: integer
+                note:
+                  type: string
+      responses:
+        '201':
+          description: Check-in created
+        '409':
+          description: Duplicate check-in (already checked in today)
+    get:
+      tags: [Check-ins]
+      summary: Get check-ins
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: date
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: from
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: to
+          in: query
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Check-in list
+
+  /checkins/streak:
+    get:
+      tags: [Check-ins]
+      summary: Get streak info
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Current and longest streak
+
+  /wrong-answers:
+    get:
+      tags: [Wrong Answers]
+      summary: List wrong answers
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Wrong answer list
+    post:
+      tags: [Wrong Answers]
+      summary: Add wrong answer
+      security:
+        - bearerAuth: []
+      responses:
+        '201':
+          description: Created
+
+  /notes:
+    get:
+      tags: [Notes]
+      summary: List notes
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Note list
+    post:
+      tags: [Notes]
+      summary: Create note
+      security:
+        - bearerAuth: []
+      responses:
+        '201':
+          description: Created
+
+  /ai/generate-review:
+    post:
+      tags: [AI]
+      summary: Generate AI review suggestion
+      description: Calls Claude API with learning data to generate a 7-day review plan
+      security:
+        - bearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                courseId:
+                  type: string
+      responses:
+        '201':
+          description: Suggestion generated
+        '503':
+          description: AI service not configured
+
+  /ai/suggestions:
+    get:
+      tags: [AI]
+      summary: Get past suggestions
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Suggestion list
+
+  /ai/suggestions/{id}/accept:
+    put:
+      tags: [AI]
+      summary: Accept suggestion and create plan
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Plan created from suggestion
+
+  /stats/overview:
+    get:
+      tags: [Statistics]
+      summary: Dashboard overview stats
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Stats overview
+
+  /stats/daily:
+    get:
+      tags: [Statistics]
+      summary: Daily activity data
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: from
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: to
+          in: query
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Daily stats array
+
+  /stats/courses:
+    get:
+      tags: [Statistics]
+      summary: Per-course progress
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: includeArchived
+          in: query
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: Course stats
+
+  /calendar:
+    get:
+      tags: [Calendar]
+      summary: Calendar events for month
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: month
+          in: query
+          schema:
+            type: string
+            example: "2026-06"
+      responses:
+        '200':
+          description: Calendar events
+
+  /notifications:
+    get:
+      tags: [Notifications]
+      summary: List notifications
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Notification list
+
+  /notifications/{id}/read:
+    put:
+      tags: [Notifications]
+      summary: Mark notification as read
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Marked
+
+  /notifications/read-all:
+    put:
+      tags: [Notifications]
+      summary: Mark all as read
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: All marked
+
+  /admin/users:
+    get:
+      tags: [Admin]
+      summary: List all users (admin only)
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: User list
+        '403':
+          description: Admin required
+
+  /admin/users/{id}/role:
+    put:
+      tags: [Admin]
+      summary: Change user role
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Role updated
+
+  /admin/configs:
+    get:
+      tags: [Admin]
+      summary: Get system configs
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Config list
+
+  /admin/configs/{key}:
+    put:
+      tags: [Admin]
+      summary: Update system config
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Config updated
