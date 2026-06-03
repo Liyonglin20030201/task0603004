@@ -1,12 +1,17 @@
 openapi: 3.0.3
 info:
   title: 学习计划管理平台 API
-  description: Personal Learning Plan Management Platform API
+  description: |
+    Personal Learning Plan Management Platform API.
+    所有需要认证的接口需在 Header 中传递 `Authorization: Bearer <token>`。
+    分页接口默认 page=1, pageSize=20。
   version: 1.0.0
+  contact:
+    name: API Support
 
 servers:
   - url: http://localhost:3000/api
-    description: Development server
+    description: Development
 
 components:
   securitySchemes:
@@ -14,123 +19,158 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
+
   schemas:
-    ApiResponse:
-      type: object
-      properties:
-        success:
-          type: boolean
-        data:
-          type: object
-        error:
-          type: string
     User:
       type: object
       properties:
-        id:
-          type: string
-          format: uuid
-        email:
-          type: string
-          format: email
-        nickname:
-          type: string
-        role:
-          type: string
-          enum: [admin, user]
-        timezone:
-          type: string
-        createdAt:
-          type: string
-          format: date-time
+        id: { type: string, format: uuid, description: 用户ID }
+        email: { type: string, format: email, description: 邮箱 }
+        nickname: { type: string, description: 昵称 }
+        avatarUrl: { type: string, nullable: true, description: 头像URL }
+        role: { type: string, enum: [admin, user], description: 角色 }
+        timezone: { type: string, description: 时区, example: Asia/Shanghai }
+        createdAt: { type: string, format: date-time }
+
     Course:
       type: object
       properties:
-        id:
-          type: string
-          format: uuid
-        title:
-          type: string
-        category:
-          type: string
-        description:
-          type: string
-        status:
-          type: string
-          enum: [active, archived, completed]
-        createdAt:
-          type: string
-          format: date-time
+        id: { type: string, format: uuid }
+        userId: { type: string, format: uuid }
+        title: { type: string, description: 课程名称, example: 高等数学 }
+        category: { type: string, description: 分类, example: 数学 }
+        description: { type: string, description: 描述 }
+        status: { type: string, enum: [active, archived, completed], description: 状态 }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
     LearningPlan:
       type: object
       properties:
-        id:
-          type: string
-          format: uuid
-        courseId:
-          type: string
-          format: uuid
-        title:
-          type: string
-        startDate:
-          type: string
-          format: date
-        endDate:
-          type: string
-          format: date
-        status:
-          type: string
-          enum: [active, paused, completed, delayed]
-        originalEndDate:
-          type: string
-          format: date
+        id: { type: string, format: uuid }
+        userId: { type: string, format: uuid }
+        courseId: { type: string, format: uuid }
+        title: { type: string, description: 计划名称 }
+        startDate: { type: string, format: date, description: 开始日期 }
+        endDate: { type: string, format: date, description: 结束日期 }
+        status: { type: string, enum: [active, paused, completed, delayed], description: 计划状态 }
+        originalEndDate: { type: string, format: date, nullable: true, description: 原始结束日期(延期前) }
+        createdAt: { type: string, format: date-time }
+
     PlanItem:
       type: object
       properties:
-        id:
-          type: string
-          format: uuid
-        title:
-          type: string
-        scheduledDate:
-          type: string
-          format: date
-        originalDate:
-          type: string
-          format: date
-        status:
-          type: string
-          enum: [pending, completed, skipped]
+        id: { type: string, format: uuid }
+        planId: { type: string, format: uuid }
+        title: { type: string, description: 项目名称 }
+        scheduledDate: { type: string, format: date, description: 计划日期 }
+        originalDate: { type: string, format: date, nullable: true, description: 原始日期(延期前) }
+        sortOrder: { type: integer, description: 排序 }
+        status: { type: string, enum: [pending, completed, skipped], description: 状态 }
+
     CheckIn:
       type: object
       properties:
-        id:
-          type: string
-          format: uuid
-        planItemId:
-          type: string
-          format: uuid
-        checkInDate:
-          type: string
-          format: date
-        durationMinutes:
-          type: integer
-        note:
-          type: string
+        id: { type: string, format: uuid }
+        userId: { type: string, format: uuid }
+        planItemId: { type: string, format: uuid }
+        checkInDate: { type: string, format: date, description: 打卡日期 }
+        durationMinutes: { type: integer, nullable: true, description: 学习时长(分钟) }
+        note: { type: string, nullable: true, description: 打卡备注 }
+        createdAt: { type: string, format: date-time }
+
+    WrongAnswer:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        userId: { type: string, format: uuid }
+        courseId: { type: string, format: uuid }
+        question: { type: string, description: 题目 }
+        wrongAnswer: { type: string, description: 错误答案 }
+        correctAnswer: { type: string, description: 正确答案 }
+        explanation: { type: string, nullable: true, description: 解析 }
+        tags: { type: array, items: { type: string }, description: 标签 }
+        reviewCount: { type: integer, description: 复习次数(SM-2算法步进) }
+        nextReviewDate: { type: string, format: date, nullable: true, description: 下次复习日期 }
+        createdAt: { type: string, format: date-time }
+
+    Note:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        userId: { type: string, format: uuid }
+        courseId: { type: string, format: uuid, nullable: true }
+        planItemId: { type: string, format: uuid, nullable: true }
+        title: { type: string, description: 标题 }
+        content: { type: string, description: 内容(支持HTML富文本) }
+        tags: { type: array, items: { type: string } }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    AISuggestion:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        userId: { type: string, format: uuid }
+        courseId: { type: string, format: uuid, nullable: true }
+        suggestionContent:
+          type: object
+          description: AI生成的复习计划
+          properties:
+            days:
+              type: array
+              items:
+                type: object
+                properties:
+                  date: { type: string, format: date }
+                  topics: { type: array, items: { type: string } }
+                  durationMinutes: { type: integer }
+                  priority: { type: string, enum: [high, medium, low] }
+            summary: { type: string }
+        generatedAt: { type: string, format: date-time }
+        accepted: { type: boolean }
+
+    Notification:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        userId: { type: string, format: uuid }
+        type: { type: string, enum: [reminder, system, achievement], description: 类型 }
+        title: { type: string }
+        content: { type: string }
+        read: { type: boolean }
+        scheduledFor: { type: string, format: date-time, nullable: true }
+        createdAt: { type: string, format: date-time }
+
+    SystemConfig:
+      type: object
+      properties:
+        key: { type: string, description: 配置键名, example: max_courses_per_user }
+        value: { description: 配置值(任意JSON类型) }
+        updatedBy: { type: string, format: uuid }
+        updatedAt: { type: string, format: date-time }
+
+    Paginated:
+      type: object
+      properties:
+        items: { type: array, items: {} }
+        total: { type: integer, description: 总记录数 }
+        page: { type: integer, description: 当前页 }
+        pageSize: { type: integer, description: 每页条数 }
+        totalPages: { type: integer, description: 总页数 }
+
     Error:
       type: object
       properties:
-        success:
-          type: boolean
-          example: false
-        error:
-          type: string
+        success: { type: boolean, example: false }
+        error: { type: string, description: 错误信息 }
 
 paths:
+  # ==================== AUTH ====================
   /auth/register:
     post:
-      tags: [Auth]
-      summary: Register new user
+      tags: [认证]
+      summary: 用户注册
       requestBody:
         required: true
         content:
@@ -139,40 +179,31 @@ paths:
               type: object
               required: [email, password, nickname]
               properties:
-                email:
-                  type: string
-                  format: email
-                password:
-                  type: string
-                  minLength: 6
-                nickname:
-                  type: string
+                email: { type: string, format: email, description: 邮箱, example: user@example.com }
+                password: { type: string, minLength: 6, description: 密码(至少6位), example: password123 }
+                nickname: { type: string, minLength: 1, maxLength: 50, description: 昵称, example: 小明 }
       responses:
         '201':
-          description: Registration successful
+          description: 注册成功
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  success:
-                    type: boolean
+                  success: { type: boolean, example: true }
                   data:
                     type: object
                     properties:
-                      token:
-                        type: string
-                      refreshToken:
-                        type: string
-                      user:
-                        $ref: '#/components/schemas/User'
-        '409':
-          description: Email already registered
+                      token: { type: string, description: JWT访问令牌 }
+                      refreshToken: { type: string, description: 刷新令牌 }
+                      user: { $ref: '#/components/schemas/User' }
+        '400': { description: 参数验证失败, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '409': { description: 邮箱已注册, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
 
   /auth/login:
     post:
-      tags: [Auth]
-      summary: Login
+      tags: [认证]
+      summary: 用户登录
       requestBody:
         required: true
         content:
@@ -181,71 +212,103 @@ paths:
               type: object
               required: [email, password]
               properties:
-                email:
-                  type: string
-                password:
-                  type: string
+                email: { type: string, format: email, example: user@example.com }
+                password: { type: string, example: password123 }
       responses:
         '200':
-          description: Login successful
-        '401':
-          description: Invalid credentials
+          description: 登录成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      token: { type: string }
+                      refreshToken: { type: string }
+                      user: { $ref: '#/components/schemas/User' }
+        '401': { description: 邮箱或密码错误, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
 
   /auth/refresh:
     post:
-      tags: [Auth]
-      summary: Refresh token
+      tags: [认证]
+      summary: 刷新令牌
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
+              required: [refreshToken]
               properties:
-                refreshToken:
-                  type: string
+                refreshToken: { type: string, description: 刷新令牌 }
       responses:
         '200':
-          description: Token refreshed
+          description: 刷新成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data:
+                    type: object
+                    properties:
+                      token: { type: string }
+                      refreshToken: { type: string }
+        '400': { description: 缺少refreshToken }
 
   /auth/me:
     get:
-      tags: [Auth]
-      summary: Get current user
-      security:
-        - bearerAuth: []
+      tags: [认证]
+      summary: 获取当前用户信息
+      security: [{ bearerAuth: [] }]
       responses:
         '200':
-          description: Current user info
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data: { $ref: '#/components/schemas/User' }
+        '401': { description: 未认证 }
 
+  # ==================== COURSES ====================
   /courses:
     get:
-      tags: [Courses]
-      summary: List courses
-      security:
-        - bearerAuth: []
+      tags: [课程管理]
+      summary: 获取课程列表
+      security: [{ bearerAuth: [] }]
       parameters:
-        - name: status
-          in: query
-          schema:
-            type: string
-            enum: [active, archived, completed]
-        - name: category
-          in: query
-          schema:
-            type: string
-        - name: page
-          in: query
-          schema:
-            type: integer
+        - { name: status, in: query, schema: { type: string, enum: [active, archived, completed] }, description: 按状态筛选 }
+        - { name: category, in: query, schema: { type: string }, description: 按分类筛选 }
+        - { name: page, in: query, schema: { type: integer, default: 1 }, description: 页码 }
+        - { name: pageSize, in: query, schema: { type: integer, default: 20 }, description: 每页条数 }
       responses:
         '200':
-          description: Paginated course list
+          description: 课程分页列表
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data:
+                    type: object
+                    properties:
+                      items: { type: array, items: { $ref: '#/components/schemas/Course' } }
+                      total: { type: integer }
+                      page: { type: integer }
+                      pageSize: { type: integer }
+                      totalPages: { type: integer }
     post:
-      tags: [Courses]
-      summary: Create course
-      security:
-        - bearerAuth: []
+      tags: [课程管理]
+      summary: 创建课程
+      security: [{ bearerAuth: [] }]
       requestBody:
         required: true
         content:
@@ -254,87 +317,113 @@ paths:
               type: object
               required: [title, category]
               properties:
-                title:
-                  type: string
-                category:
-                  type: string
-                description:
-                  type: string
+                title: { type: string, minLength: 1, maxLength: 200, description: 课程名称, example: 高等数学 }
+                category: { type: string, minLength: 1, maxLength: 50, description: 分类, example: 数学 }
+                description: { type: string, description: 描述, default: '' }
       responses:
-        '201':
-          description: Course created
+        '201': { description: 创建成功 }
+        '400': { description: 参数验证失败 }
 
   /courses/{id}:
     get:
-      tags: [Courses]
-      summary: Get course detail with progress
-      security:
-        - bearerAuth: []
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
+      tags: [课程管理]
+      summary: 获取课程详情(含进度)
+      security: [{ bearerAuth: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
       responses:
         '200':
-          description: Course detail
-        '404':
-          description: Not found
+          description: 课程详情
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data:
+                    allOf:
+                      - { $ref: '#/components/schemas/Course' }
+                      - type: object
+                        properties:
+                          progress:
+                            type: object
+                            properties:
+                              totalItems: { type: integer, description: 总学习项数 }
+                              completedItems: { type: integer, description: 已完成项数 }
+                              completionRate: { type: number, description: 完成率(0-1) }
+                          learningPlans: { type: array, items: { $ref: '#/components/schemas/LearningPlan' } }
+        '404': { description: 课程不存在 }
     put:
-      tags: [Courses]
-      summary: Update course
-      security:
-        - bearerAuth: []
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
+      tags: [课程管理]
+      summary: 更新课程
+      security: [{ bearerAuth: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title: { type: string, minLength: 1, maxLength: 200 }
+                category: { type: string, minLength: 1, maxLength: 50 }
+                description: { type: string }
       responses:
-        '200':
-          description: Course updated
+        '200': { description: 更新成功 }
+        '404': { description: 不存在 }
 
   /courses/{id}/archive:
     put:
-      tags: [Courses]
-      summary: Archive course (preserves history)
-      security:
-        - bearerAuth: []
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
+      tags: [课程管理]
+      summary: 归档课程(保留所有历史数据)
+      security: [{ bearerAuth: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        '200': { description: 归档成功,课程status变为archived }
+        '404': { description: 不存在 }
+
+  /courses/{id}/stats:
+    get:
+      tags: [课程管理]
+      summary: 获取课程统计数据
+      security: [{ bearerAuth: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
       responses:
         '200':
-          description: Course archived
+          description: 统计数据
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data:
+                    type: object
+                    properties:
+                      totalPlans: { type: integer, description: 计划总数 }
+                      totalItems: { type: integer, description: 学习项总数 }
+                      completedItems: { type: integer, description: 已完成数 }
+                      completionRate: { type: number, description: 完成率 }
+                      totalStudyMinutes: { type: integer, description: 总学习分钟 }
+                      wrongAnswerCount: { type: integer, description: 错题数 }
+                      noteCount: { type: integer, description: 笔记数 }
+        '404': { description: 不存在 }
 
+  # ==================== PLANS ====================
   /plans:
     get:
-      tags: [Plans]
-      summary: List learning plans
-      security:
-        - bearerAuth: []
+      tags: [学习计划]
+      summary: 获取计划列表
+      security: [{ bearerAuth: [] }]
       parameters:
-        - name: courseId
-          in: query
-          schema:
-            type: string
-        - name: status
-          in: query
-          schema:
-            type: string
+        - { name: courseId, in: query, schema: { type: string, format: uuid }, description: 按课程筛选 }
+        - { name: status, in: query, schema: { type: string, enum: [active, paused, completed, delayed] } }
+        - { name: page, in: query, schema: { type: integer, default: 1 } }
+        - { name: pageSize, in: query, schema: { type: integer, default: 20 } }
       responses:
-        '200':
-          description: Plan list
+        '200': { description: 计划列表(含进度信息和关联课程) }
     post:
-      tags: [Plans]
-      summary: Create plan with items
-      security:
-        - bearerAuth: []
+      tags: [学习计划]
+      summary: 创建学习计划(含学习项)
+      security: [{ bearerAuth: [] }]
       requestBody:
         required: true
         content:
@@ -343,56 +432,90 @@ paths:
               type: object
               required: [courseId, title, startDate, endDate, items]
               properties:
-                courseId:
-                  type: string
-                title:
-                  type: string
-                startDate:
-                  type: string
-                  format: date
-                endDate:
-                  type: string
-                  format: date
+                courseId: { type: string, format: uuid, description: 关联课程ID }
+                title: { type: string, minLength: 1, maxLength: 200, description: 计划名称 }
+                startDate: { type: string, format: date, description: 开始日期, example: '2026-06-01' }
+                endDate: { type: string, format: date, description: 结束日期, example: '2026-06-07' }
                 items:
                   type: array
+                  description: 学习项列表
                   items:
                     type: object
+                    required: [title, scheduledDate]
                     properties:
-                      title:
-                        type: string
-                      scheduledDate:
-                        type: string
-                        format: date
+                      title: { type: string, minLength: 1, maxLength: 200, description: 项目名称 }
+                      scheduledDate: { type: string, format: date, description: 计划完成日期 }
+                      sortOrder: { type: integer, description: 排序(默认按index) }
       responses:
-        '201':
-          description: Plan created
+        '201': { description: 创建成功(返回计划及items) }
+        '404': { description: 课程不存在 }
+
+  /plans/{id}:
+    get:
+      tags: [学习计划]
+      summary: 获取计划详情(含所有项目和打卡记录)
+      security: [{ bearerAuth: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        '200': { description: 计划详情 }
+        '404': { description: 不存在 }
+    put:
+      tags: [学习计划]
+      summary: 更新计划
+      security: [{ bearerAuth: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title: { type: string }
+                status: { type: string, enum: [active, paused, completed] }
+      responses:
+        '200': { description: 更新成功 }
+        '404': { description: 不存在 }
+    delete:
+      tags: [学习计划]
+      summary: 归档计划(软删除)
+      security: [{ bearerAuth: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        '200': { description: 归档成功 }
+        '404': { description: 不存在 }
 
   /plans/{id}/delay:
     post:
-      tags: [Plans]
-      summary: Handle plan delay
-      description: Marks overdue items as skipped, shifts future items forward
-      security:
-        - bearerAuth: []
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
+      tags: [学习计划]
+      summary: 处理计划延期
+      description: |
+        将所有逾期未完成的项目标记为"已跳过"，后续待办项自动顺延对应天数。
+        原始日期保留在 originalDate 字段中用于统计。
+      security: [{ bearerAuth: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
       responses:
         '200':
-          description: Plan delayed successfully
-        '400':
-          description: No overdue items
+          description: 延期处理成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data: { $ref: '#/components/schemas/LearningPlan' }
+                  message: { type: string, example: 已延期 2 天，2 个逾期项目已标记为跳过 }
+        '400': { description: 没有逾期项目需要处理 }
+        '404': { description: 计划不存在 }
 
+  # ==================== CHECK-INS ====================
   /checkins:
     post:
-      tags: [Check-ins]
-      summary: Create check-in
-      description: Returns 409 if already checked in for this item today
-      security:
-        - bearerAuth: []
+      tags: [每日打卡]
+      summary: 创建打卡记录
+      description: |
+        为指定学习项创建当日打卡记录。数据库有UNIQUE(user_id, plan_item_id, check_in_date)约束，
+        同一项目同一天只能打卡一次，重复打卡返回409。
+      security: [{ bearerAuth: [] }]
       requestBody:
         required: true
         content:
@@ -401,265 +524,539 @@ paths:
               type: object
               required: [planItemId]
               properties:
-                planItemId:
-                  type: string
-                durationMinutes:
-                  type: integer
-                note:
-                  type: string
+                planItemId: { type: string, format: uuid, description: 学习项ID }
+                durationMinutes: { type: integer, minimum: 1, description: 学习时长(分钟) }
+                note: { type: string, description: 备注 }
       responses:
         '201':
-          description: Check-in created
+          description: 打卡成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data: { $ref: '#/components/schemas/CheckIn' }
+        '404': { description: 学习项不存在 }
         '409':
-          description: Duplicate check-in (already checked in today)
+          description: 重复打卡
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: false }
+                  error: { type: string, example: 今日已打卡该项目，请勿重复打卡 }
     get:
-      tags: [Check-ins]
-      summary: Get check-ins
-      security:
-        - bearerAuth: []
+      tags: [每日打卡]
+      summary: 查询打卡记录
+      security: [{ bearerAuth: [] }]
       parameters:
-        - name: date
-          in: query
-          schema:
-            type: string
-            format: date
-        - name: from
-          in: query
-          schema:
-            type: string
-            format: date
-        - name: to
-          in: query
-          schema:
-            type: string
-            format: date
+        - { name: date, in: query, schema: { type: string, format: date }, description: 查询指定日期 }
+        - { name: from, in: query, schema: { type: string, format: date }, description: 范围起始日期 }
+        - { name: to, in: query, schema: { type: string, format: date }, description: 范围结束日期 }
       responses:
-        '200':
-          description: Check-in list
+        '200': { description: 打卡记录列表(含关联的planItem信息) }
 
   /checkins/streak:
     get:
-      tags: [Check-ins]
-      summary: Get streak info
-      security:
-        - bearerAuth: []
+      tags: [每日打卡]
+      summary: 获取连续打卡信息
+      security: [{ bearerAuth: [] }]
       responses:
         '200':
-          description: Current and longest streak
+          description: 连续打卡天数
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data:
+                    type: object
+                    properties:
+                      currentStreak: { type: integer, description: 当前连续天数 }
+                      longestStreak: { type: integer, description: 最长连续天数 }
 
+  /checkins/{id}:
+    delete:
+      tags: [每日打卡]
+      summary: 撤销打卡(仅限当日)
+      security: [{ bearerAuth: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        '200': { description: 撤销成功 }
+        '400': { description: 只能撤销今日的打卡记录 }
+        '404': { description: 不存在 }
+
+  # ==================== WRONG ANSWERS ====================
   /wrong-answers:
     get:
-      tags: [Wrong Answers]
-      summary: List wrong answers
-      security:
-        - bearerAuth: []
+      tags: [错题本]
+      summary: 获取错题列表
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: courseId, in: query, schema: { type: string, format: uuid }, description: 按课程筛选 }
+        - { name: tag, in: query, schema: { type: string }, description: 按标签筛选 }
+        - { name: page, in: query, schema: { type: integer, default: 1 } }
+        - { name: pageSize, in: query, schema: { type: integer, default: 20 } }
+      responses:
+        '200': { description: 错题分页列表 }
+    post:
+      tags: [错题本]
+      summary: 添加错题
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [courseId, question, wrongAnswer, correctAnswer]
+              properties:
+                courseId: { type: string, format: uuid, description: 所属课程 }
+                question: { type: string, description: 题目 }
+                wrongAnswer: { type: string, description: 你的错误答案 }
+                correctAnswer: { type: string, description: 正确答案 }
+                explanation: { type: string, description: 解析(选填) }
+                tags: { type: array, items: { type: string }, description: 标签 }
+      responses:
+        '201': { description: 添加成功(nextReviewDate自动设为明天) }
+        '404': { description: 课程不存在 }
+
+  /wrong-answers/due:
+    get:
+      tags: [错题本]
+      summary: 获取今日待复习错题
+      description: 返回所有 nextReviewDate <= 今天 的错题(基于SM-2算法)
+      security: [{ bearerAuth: [] }]
       responses:
         '200':
-          description: Wrong answer list
-    post:
-      tags: [Wrong Answers]
-      summary: Add wrong answer
-      security:
-        - bearerAuth: []
-      responses:
-        '201':
-          description: Created
+          description: 待复习列表
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data: { type: array, items: { $ref: '#/components/schemas/WrongAnswer' } }
 
+  /wrong-answers/stats:
+    get:
+      tags: [错题本]
+      summary: 获取错题复习统计
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: 复习统计
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data:
+                    type: object
+                    properties:
+                      total: { type: integer, description: 总错题数 }
+                      dueToday: { type: integer, description: 今日待复习 }
+                      mastered: { type: integer, description: 已掌握(reviewCount>=5) }
+                      learning: { type: integer, description: 学习中(1<=reviewCount<5) }
+                      newItems: { type: integer, description: 新错题(reviewCount=0) }
+
+  /wrong-answers/{id}/review:
+    post:
+      tags: [错题本]
+      summary: 提交复习结果(SM-2算法)
+      description: |
+        quality 评分说明:
+        - 0-2: 忘记/困难 → reviewCount重置为0，明天再复习
+        - 3: 困难但答对 → reviewCount+1，按SM-2间隔复习
+        - 4: 中等 → reviewCount+1
+        - 5: 容易 → reviewCount+1
+        SM-2间隔: [1, 3, 7, 14, 30, 60, 120] 天
+      security: [{ bearerAuth: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [quality]
+              properties:
+                quality: { type: integer, minimum: 0, maximum: 5, description: 复习质量评分 }
+      responses:
+        '200': { description: 复习记录更新成功(返回更新后的错题) }
+        '404': { description: 错题不存在 }
+
+  /wrong-answers/{id}:
+    put:
+      tags: [错题本]
+      summary: 更新错题信息
+      security: [{ bearerAuth: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        '200': { description: 更新成功 }
+        '404': { description: 不存在 }
+    delete:
+      tags: [错题本]
+      summary: 删除错题
+      security: [{ bearerAuth: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        '200': { description: 删除成功 }
+        '404': { description: 不存在 }
+
+  # ==================== NOTES ====================
   /notes:
     get:
-      tags: [Notes]
-      summary: List notes
-      security:
-        - bearerAuth: []
+      tags: [笔记]
+      summary: 获取笔记列表
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: courseId, in: query, schema: { type: string, format: uuid } }
+        - { name: tag, in: query, schema: { type: string } }
+        - { name: search, in: query, schema: { type: string }, description: 搜索标题和内容 }
+        - { name: page, in: query, schema: { type: integer, default: 1 } }
+        - { name: pageSize, in: query, schema: { type: integer, default: 20 } }
       responses:
-        '200':
-          description: Note list
+        '200': { description: 笔记分页列表 }
     post:
-      tags: [Notes]
-      summary: Create note
-      security:
-        - bearerAuth: []
+      tags: [笔记]
+      summary: 创建笔记(支持富文本HTML)
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title]
+              properties:
+                title: { type: string, minLength: 1, maxLength: 200 }
+                content: { type: string, description: 笔记内容(支持HTML富文本) }
+                courseId: { type: string, format: uuid, description: 关联课程(选填) }
+                planItemId: { type: string, format: uuid, description: 关联学习项(选填) }
+                tags: { type: array, items: { type: string } }
       responses:
-        '201':
-          description: Created
+        '201': { description: 创建成功 }
+        '404': { description: 关联课程不存在 }
 
+  /notes/{id}:
+    get:
+      tags: [笔记]
+      summary: 获取笔记详情
+      security: [{ bearerAuth: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        '200': { description: 笔记详情 }
+        '404': { description: 不存在 }
+    put:
+      tags: [笔记]
+      summary: 更新笔记
+      security: [{ bearerAuth: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        '200': { description: 更新成功 }
+        '404': { description: 不存在 }
+    delete:
+      tags: [笔记]
+      summary: 删除笔记
+      security: [{ bearerAuth: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        '200': { description: 删除成功 }
+        '404': { description: 不存在 }
+
+  # ==================== AI REVIEW ====================
   /ai/generate-review:
     post:
-      tags: [AI]
-      summary: Generate AI review suggestion
-      description: Calls Claude API with learning data to generate a 7-day review plan
-      security:
-        - bearerAuth: []
+      tags: [AI复习建议]
+      summary: 生成AI复习建议
+      description: |
+        调用Claude API，根据用户的错题记录、学习进度和薄弱环节，
+        生成基于艾宾浩斯遗忘曲线的7天个性化复习计划。
+      security: [{ bearerAuth: [] }]
       requestBody:
         content:
           application/json:
             schema:
               type: object
               properties:
-                courseId:
-                  type: string
+                courseId: { type: string, format: uuid, description: 限定课程范围(选填) }
       responses:
-        '201':
-          description: Suggestion generated
-        '503':
-          description: AI service not configured
+        '201': { description: 建议生成成功 }
+        '503': { description: AI服务未配置(缺少ANTHROPIC_API_KEY) }
 
   /ai/suggestions:
     get:
-      tags: [AI]
-      summary: Get past suggestions
-      security:
-        - bearerAuth: []
+      tags: [AI复习建议]
+      summary: 获取历史建议列表
+      security: [{ bearerAuth: [] }]
       responses:
-        '200':
-          description: Suggestion list
+        '200': { description: 最近10条AI建议 }
 
   /ai/suggestions/{id}/accept:
     put:
-      tags: [AI]
-      summary: Accept suggestion and create plan
-      security:
-        - bearerAuth: []
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
+      tags: [AI复习建议]
+      summary: 采纳建议(自动创建复习计划)
+      description: 将AI生成的复习建议转化为实际的学习计划和学习项
+      security: [{ bearerAuth: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
       responses:
-        '200':
-          description: Plan created from suggestion
+        '200': { description: 已创建复习计划 }
+        '400': { description: 建议内容为空或无课程关联 }
+        '404': { description: 建议不存在 }
 
+  # ==================== STATS ====================
   /stats/overview:
     get:
-      tags: [Statistics]
-      summary: Dashboard overview stats
-      security:
-        - bearerAuth: []
+      tags: [进度统计]
+      summary: 仪表盘概览统计
+      security: [{ bearerAuth: [] }]
       responses:
         '200':
-          description: Stats overview
+          description: 概览数据
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data:
+                    type: object
+                    properties:
+                      totalCourses: { type: integer }
+                      activePlans: { type: integer }
+                      currentStreak: { type: integer }
+                      longestStreak: { type: integer }
+                      completionRate: { type: number, description: 0-1之间 }
+                      todayCheckins: { type: integer }
+                      totalStudyMinutes: { type: integer }
 
   /stats/daily:
     get:
-      tags: [Statistics]
-      summary: Daily activity data
-      security:
-        - bearerAuth: []
+      tags: [进度统计]
+      summary: 每日学习数据
+      security: [{ bearerAuth: [] }]
       parameters:
-        - name: from
-          in: query
-          schema:
-            type: string
-            format: date
-        - name: to
-          in: query
-          schema:
-            type: string
-            format: date
+        - { name: from, in: query, schema: { type: string, format: date }, description: 起始日期(默认30天前) }
+        - { name: to, in: query, schema: { type: string, format: date }, description: 结束日期(默认今天) }
       responses:
         '200':
-          description: Daily stats array
+          description: 每日统计数组
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        date: { type: string, format: date }
+                        checkIns: { type: integer }
+                        studyMinutes: { type: integer }
+                        itemsCompleted: { type: integer }
 
   /stats/courses:
     get:
-      tags: [Statistics]
-      summary: Per-course progress
-      security:
-        - bearerAuth: []
+      tags: [进度统计]
+      summary: 各课程进度对比
+      security: [{ bearerAuth: [] }]
       parameters:
-        - name: includeArchived
-          in: query
-          schema:
-            type: boolean
+        - { name: includeArchived, in: query, schema: { type: boolean, default: false }, description: 是否包含已归档课程 }
       responses:
         '200':
-          description: Course stats
+          description: 课程进度列表
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        courseId: { type: string }
+                        courseTitle: { type: string }
+                        status: { type: string }
+                        totalItems: { type: integer }
+                        completedItems: { type: integer }
+                        completionRate: { type: number }
 
+  /stats/weekly-report:
+    get:
+      tags: [进度统计]
+      summary: 本周学习报告
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: 周报数据
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data:
+                    type: object
+                    properties:
+                      period: { type: object, properties: { from: { type: string }, to: { type: string } } }
+                      totalStudyMinutes: { type: integer }
+                      activeDays: { type: integer }
+                      checkInCount: { type: integer }
+                      completedItems: { type: integer }
+                      newWrongAnswers: { type: integer }
+
+  # ==================== CALENDAR ====================
   /calendar:
     get:
-      tags: [Calendar]
-      summary: Calendar events for month
-      security:
-        - bearerAuth: []
+      tags: [日历视图]
+      summary: 获取指定月份的日历事件
+      security: [{ bearerAuth: [] }]
       parameters:
-        - name: month
-          in: query
-          schema:
-            type: string
-            example: "2026-06"
+        - { name: month, in: query, schema: { type: string, example: '2026-06' }, description: 月份(YYYY-MM格式,默认当月) }
       responses:
         '200':
-          description: Calendar events
+          description: 日历事件列表
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        type: { type: string, enum: [completed, planned, skipped, checkin], description: 事件类型 }
+                        date: { type: string, format: date }
+                        title: { type: string }
+                        planTitle: { type: string }
+                        courseName: { type: string }
+                        status: { type: string }
+                        durationMinutes: { type: integer }
 
+  # ==================== NOTIFICATIONS ====================
   /notifications:
     get:
-      tags: [Notifications]
-      summary: List notifications
-      security:
-        - bearerAuth: []
+      tags: [通知]
+      summary: 获取通知列表
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: unreadOnly, in: query, schema: { type: boolean }, description: 仅显示未读 }
+        - { name: page, in: query, schema: { type: integer, default: 1 } }
+        - { name: pageSize, in: query, schema: { type: integer, default: 20 } }
       responses:
         '200':
-          description: Notification list
+          description: 通知列表(含未读计数)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data:
+                    type: object
+                    properties:
+                      items: { type: array, items: { $ref: '#/components/schemas/Notification' } }
+                      total: { type: integer }
+                      unreadCount: { type: integer, description: 未读通知总数 }
+                      page: { type: integer }
+                      pageSize: { type: integer }
+                      totalPages: { type: integer }
 
   /notifications/{id}/read:
     put:
-      tags: [Notifications]
-      summary: Mark notification as read
-      security:
-        - bearerAuth: []
+      tags: [通知]
+      summary: 标记单条为已读
+      security: [{ bearerAuth: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
       responses:
-        '200':
-          description: Marked
+        '200': { description: 标记成功 }
+        '404': { description: 不存在 }
 
   /notifications/read-all:
     put:
-      tags: [Notifications]
-      summary: Mark all as read
-      security:
-        - bearerAuth: []
+      tags: [通知]
+      summary: 全部标为已读
+      security: [{ bearerAuth: [] }]
       responses:
-        '200':
-          description: All marked
+        '200': { description: 全部标记成功 }
 
+  # ==================== ADMIN ====================
   /admin/users:
     get:
-      tags: [Admin]
-      summary: List all users (admin only)
-      security:
-        - bearerAuth: []
+      tags: [后台管理]
+      summary: 获取用户列表(管理员)
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: page, in: query, schema: { type: integer, default: 1 } }
+        - { name: pageSize, in: query, schema: { type: integer, default: 20 } }
       responses:
-        '200':
-          description: User list
-        '403':
-          description: Admin required
+        '200': { description: 用户列表(含各项计数) }
+        '403': { description: 需要管理员权限 }
 
   /admin/users/{id}/role:
     put:
-      tags: [Admin]
-      summary: Change user role
-      security:
-        - bearerAuth: []
+      tags: [后台管理]
+      summary: 修改用户角色
+      security: [{ bearerAuth: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [role]
+              properties:
+                role: { type: string, enum: [admin, user], description: 新角色 }
       responses:
-        '200':
-          description: Role updated
+        '200': { description: 角色更新成功 }
+        '400': { description: 不能修改自己的角色 }
+        '403': { description: 需要管理员权限 }
+        '404': { description: 用户不存在 }
 
   /admin/configs:
     get:
-      tags: [Admin]
-      summary: Get system configs
-      security:
-        - bearerAuth: []
+      tags: [后台管理]
+      summary: 获取系统配置列表
+      security: [{ bearerAuth: [] }]
       responses:
         '200':
-          description: Config list
+          description: 配置列表
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data: { type: array, items: { $ref: '#/components/schemas/SystemConfig' } }
+        '403': { description: 需要管理员权限 }
 
   /admin/configs/{key}:
     put:
-      tags: [Admin]
-      summary: Update system config
-      security:
-        - bearerAuth: []
+      tags: [后台管理]
+      summary: 更新/创建系统配置
+      security: [{ bearerAuth: [] }]
+      parameters: [{ name: key, in: path, required: true, schema: { type: string }, description: 配置键名 }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [value]
+              properties:
+                value: { description: 配置值(任意JSON类型), example: 50 }
       responses:
-        '200':
-          description: Config updated
+        '200': { description: 配置保存成功 }
+        '403': { description: 需要管理员权限 }

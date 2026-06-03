@@ -7,3 +7,72 @@ body {
 #root {
   min-height: 100vh;
 }
+
+/* Rich Text Editor Styles */
+.ql-container {
+  font-size: 14px;
+  border-bottom-left-radius: 8px;
+  border-bottom-right-radius: 8px;
+}
+
+.ql-toolbar {
+  border-top-left-radius: 8px;
+  border-top-right-radius: 8px;
+  background: #fafafa;
+}
+
+.ql-editor {
+  min-height: 350px;
+  line-height: 1.8;
+}
+
+.ql-editor h1, .ql-editor h2, .ql-editor h3 {
+  margin-top: 1em;
+  margin-bottom: 0.5em;
+}
+
+.ql-editor pre {
+  background: #f6f8fa;
+  border-radius: 6px;
+  padding: 12px;
+  font-size: 13px;
+}
+
+.ql-editor blockquote {
+  border-left: 4px solid #1890ff;
+  padding-left: 12px;
+  color: #666;
+  margin: 12px 0;
+}
+
+.ql-editor img {
+  max-width: 100%;
+  border-radius: 4px;
+}
+
+/* Note Content Display */
+.note-content h1, .note-content h2, .note-content h3 {
+  margin-top: 0.8em;
+  margin-bottom: 0.4em;
+}
+
+.note-content pre {
+  background: #f6f8fa;
+  border-radius: 6px;
+  padding: 12px;
+  overflow-x: auto;
+}
+
+.note-content blockquote {
+  border-left: 4px solid #1890ff;
+  padding-left: 12px;
+  color: #666;
+}
+
+.note-content img {
+  max-width: 100%;
+}
+
+.note-content ul, .note-content ol {
+  padding-left: 24px;
+}

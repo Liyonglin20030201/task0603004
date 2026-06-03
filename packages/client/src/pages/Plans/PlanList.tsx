@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
-import { Card, Table, Tag, Button, Space, Select, Progress, message } from 'antd';
-import { PlusOutlined, EyeOutlined } from '@ant-design/icons';
+import { Card, Table, Tag, Button, Space, Select, Progress, message, Popconfirm } from 'antd';
+import { PlusOutlined, EyeOutlined, DeleteOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
-import { getPlans } from '../../api/plans.api';
+import { getPlans, deletePlan } from '../../api/plans.api';
 
 const statusColors: Record<string, string> = { active: 'green', paused: 'orange', completed: 'blue', delayed: 'red' };
 const statusLabels: Record<string, string> = { active: '进行中', paused: '已暂停', completed: '已完成', delayed: '已延期' };
@@ -27,6 +27,14 @@ export default function PlanList() {
 
   useEffect(() => { fetchPlans(); }, [statusFilter, page]);
 
+  const handleDelete = async (id: string) => {
+    try {
+      await deletePlan(id);
+      message.success('计划已删除');
+      fetchPlans();
+    } catch { message.error('删除失败'); }
+  };
+
   const columns = [
     { title: '计划名称', dataIndex: 'title', key: 'title' },
     { title: '课程', dataIndex: ['course', 'title'], key: 'course' },
@@ -42,7 +50,14 @@ export default function PlanList() {
     { title: '结束日期', dataIndex: 'endDate', key: 'endDate', render: (v: string) => v?.slice(0, 10) },
     {
       title: '操作', key: 'actions',
-      render: (_: any, r: any) => <Button type="link" icon={<EyeOutlined />} onClick={() => navigate(`/plans/${r.id}`)}>查看</Button>,
+      render: (_: any, r: any) => (
+        <Space>
+          <Button type="link" icon={<EyeOutlined />} onClick={() => navigate(`/plans/${r.id}`)}>查看</Button>
+          <Popconfirm title="确认删除此计划？" onConfirm={() => handleDelete(r.id)} okText="删除" cancelText="取消">
+            <Button type="link" danger icon={<DeleteOutlined />}>删除</Button>
+          </Popconfirm>
+        </Space>
+      ),
     },
   ];
 

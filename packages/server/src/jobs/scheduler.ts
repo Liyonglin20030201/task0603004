@@ -44,6 +44,49 @@ export function startCronJobs() {
     }
   });
 
+  // Daily at 8:30 AM - Ebbinghaus spaced repetition review reminders
+  cron.schedule('30 8 * * *', async () => {
+    try {
+      const today = new Date();
+      today.setHours(23, 59, 59, 999);
+
+      const usersWithDueReviews = await prisma.wrongAnswer.groupBy({
+        by: ['userId'],
+        where: { nextReviewDate: { lte: today } },
+        _count: { id: true },
+      });
+
+      for (const group of usersWithDueReviews) {
+        const count = group._count.id;
+        if (count === 0) continue;
+
+        const existing = await prisma.notification.findFirst({
+          where: {
+            userId: group.userId,
+            type: 'reminder',
+            title: '错题复习提醒',
+            read: false,
+            createdAt: { gte: new Date(new Date().setHours(0, 0, 0, 0)) },
+          },
+        });
+        if (existing) continue;
+
+        await prisma.notification.create({
+          data: {
+            userId: group.userId,
+            type: 'reminder',
+            title: '错题复习提醒',
+            content: `根据艾宾浩斯遗忘曲线，你有 ${count} 道错题到了最佳复习时间，及时复习可以显著提高记忆保持率！`,
+          },
+        });
+      }
+
+      console.log(`[Cron] Sent review reminders to ${usersWithDueReviews.length} users`);
+    } catch (err) {
+      console.error('[Cron] Error sending review reminders:', err);
+    }
+  });
+
   // Daily at 9:00 AM - remind about today's tasks
   cron.schedule('0 9 * * *', async () => {
     try {

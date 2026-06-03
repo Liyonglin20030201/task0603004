@@ -25,3 +25,7 @@ export async function delayPlan(id: string) {
   const res = await apiClient.post<ApiResponse<any>>(`/plans/${id}/delay`);
   return res.data;
 }
+
+export async function deletePlan(id: string) {
+  await apiClient.delete(`/plans/${id}`);
+}

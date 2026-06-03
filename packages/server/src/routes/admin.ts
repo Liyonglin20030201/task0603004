@@ -74,3 +74,13 @@ adminRouter.put('/configs/:key', validate(configSchema), async (req, res, next) 
     res.json({ success: true, data: config });
   } catch (err) { next(err); }
 });
+
+adminRouter.delete('/configs/:key', async (req, res, next) => {
+  try {
+    const existing = await prisma.systemConfig.findUnique({ where: { key: req.params.key } });
+    if (!existing) throw new AppError('Config not found', 404);
+
+    await prisma.systemConfig.delete({ where: { key: req.params.key } });
+    res.json({ success: true, message: 'Config deleted' });
+  } catch (err) { next(err); }
+});

@@ -1,6 +1,14 @@
 import apiClient from './client';
 import { ApiResponse, WrongAnswer, PaginatedResponse } from '@study-platform/shared';
 
+export interface WrongAnswerStats {
+  total: number;
+  dueToday: number;
+  mastered: number;
+  learning: number;
+  newItems: number;
+}
+
 export async function getWrongAnswers(params?: { courseId?: string; tag?: string; page?: number }) {
   const res = await apiClient.get<ApiResponse<PaginatedResponse<WrongAnswer>>>('/wrong-answers', { params });
   return res.data.data!;
@@ -18,4 +26,19 @@ export async function updateWrongAnswer(id: string, data: any) {
 
 export async function deleteWrongAnswer(id: string) {
   await apiClient.delete(`/wrong-answers/${id}`);
+}
+
+export async function getDueWrongAnswers() {
+  const res = await apiClient.get<ApiResponse<WrongAnswer[]>>('/wrong-answers/due');
+  return res.data.data!;
+}
+
+export async function reviewWrongAnswer(id: string, quality: number) {
+  const res = await apiClient.post<ApiResponse<WrongAnswer>>(`/wrong-answers/${id}/review`, { quality });
+  return res.data.data!;
+}
+
+export async function getWrongAnswerStats() {
+  const res = await apiClient.get<ApiResponse<WrongAnswerStats>>('/wrong-answers/stats');
+  return res.data.data!;
 }
