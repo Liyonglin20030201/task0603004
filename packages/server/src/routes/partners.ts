@@ -1,8 +1,10 @@
 import { Router } from 'express';
+import Anthropic from '@anthropic-ai/sdk';
 import { prisma } from '../app';
 import { authenticate } from '../middleware/auth';
 import { findMatches } from '../lib/partnerMatcher';
 import { sendNotification } from '../lib/notificationSender';
+import { analyzePartnerComparison } from '../lib/partnerAnalyzer';
 
 export const partnerRouter = Router();
 partnerRouter.use(authenticate);
@@ -242,6 +244,56 @@ partnerRouter.get('/:userId/progress', async (req, res, next) => {
         weeklyStudyMinutes: weeklyMinutes.reduce((s: number, c: any) => s + (c.durationMinutes || 0), 0),
       },
     });
+  } catch (err) { next(err); }
+});
+
+partnerRouter.get('/:userId/analysis', async (req, res, next) => {
+  try {
+    const myUserId = req.user!.userId;
+    const { userId: partnerId } = req.params;
+
+    const partnership = await prisma.partnership.findFirst({
+      where: {
+        isActive: true,
+        OR: [
+          { user1Id: myUserId, user2Id: partnerId },
+          { user1Id: partnerId, user2Id: myUserId },
+        ],
+      },
+    });
+
+    if (!partnership) {
+      return res.status(403).json({ success: false, error: '非学习伙伴关系' });
+    }
+
+    const analysis = await analyzePartnerComparison(prisma, myUserId, partnerId);
+
+    // Generate AI collaboration suggestions
+    let aiSuggestions: string | null = null;
+    const apiKey = process.env.ANTHROPIC_API_KEY;
+    if (apiKey && (analysis.myStrengths.length > 0 || analysis.partnerStrengths.length > 0)) {
+      try {
+        const client = new Anthropic({ apiKey });
+        const message = await client.messages.create({
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: 500,
+          messages: [{
+            role: 'user',
+            content: `作为学习顾问，根据两位学习伙伴的对比分析，给出3-4条具体的协作建议（中文）：
+我的优势课程：${analysis.myStrengths.map((s: any) => `${s.courseTitle}(完成率${Math.round(s.completionRate * 100)}%)`).join('、') || '暂无'}
+伙伴的优势课程：${analysis.partnerStrengths.map((s: any) => `${s.courseTitle}(完成率${Math.round(s.completionRate * 100)}%)`).join('、') || '暂无'}
+互补领域：${analysis.complementary.map((c: any) => `${c.courseTitle}(${c.strongUser === 'me' ? '我强' : '伙伴强'})`).join('、') || '暂无'}
+我的学习节奏：每周${analysis.myStats.weeklyMinutes}分钟，连续打卡${analysis.myStats.streak}天
+伙伴的学习节奏：每周${analysis.partnerStats.weeklyMinutes}分钟，连续打卡${analysis.partnerStats.streak}天
+请给出简洁实用的协作建议。`,
+          }],
+        });
+        const textBlock = message.content.find((b: any) => b.type === 'text');
+        if (textBlock && textBlock.type === 'text') aiSuggestions = textBlock.text;
+      } catch {}
+    }
+
+    res.json({ success: true, data: { ...analysis, aiSuggestions } });
   } catch (err) { next(err); }
 });
 

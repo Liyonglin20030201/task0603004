@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
-import { Card, Row, Col, Spin, Button, Tabs, List, Avatar, Tag, Progress, Modal, Input, message, Empty, Popconfirm, Statistic } from 'antd';
-import { UserAddOutlined, HeartOutlined, CheckOutlined, CloseOutlined } from '@ant-design/icons';
-import { getPartnerProfile, updatePartnerProfile, getMatches, sendPartnerRequest, getPartnerRequests, respondToRequest, getPartners, getPartnerProgress, removePartner } from '../../api/partners.api';
+import { Card, Row, Col, Spin, Button, Tabs, List, Avatar, Tag, Progress, Modal, Input, message, Empty, Popconfirm, Statistic, Divider, Typography } from 'antd';
+import { UserAddOutlined, HeartOutlined, CheckOutlined, CloseOutlined, BarChartOutlined } from '@ant-design/icons';
+import { getPartnerProfile, updatePartnerProfile, getMatches, sendPartnerRequest, getPartnerRequests, respondToRequest, getPartners, getPartnerProgress, removePartner, getPartnerAnalysis } from '../../api/partners.api';
 import { getCourses } from '../../api/courses.api';
+
+const { Text, Paragraph } = Typography;
 
 export default function PartnerPage() {
   const [loading, setLoading] = useState(true);
@@ -14,6 +16,10 @@ export default function PartnerPage() {
   const [partnerProgress, setPartnerProgress] = useState<Record<string, any>>({});
   const [setupModal, setSetupModal] = useState(false);
   const [bio, setBio] = useState('');
+  const [analysisModal, setAnalysisModal] = useState(false);
+  const [analysisData, setAnalysisData] = useState<any>(null);
+  const [analysisLoading, setAnalysisLoading] = useState(false);
+  const [analysisPartnerName, setAnalysisPartnerName] = useState('');
 
   const loadData = async () => {
     try {
@@ -83,6 +89,20 @@ export default function PartnerPage() {
     } catch { message.error('操作失败'); }
   };
 
+  const handleViewAnalysis = async (partnerId: string, partnerName: string) => {
+    setAnalysisPartnerName(partnerName);
+    setAnalysisModal(true);
+    setAnalysisLoading(true);
+    try {
+      const data = await getPartnerAnalysis(partnerId);
+      setAnalysisData(data);
+    } catch {
+      message.error('分析加载失败');
+    } finally {
+      setAnalysisLoading(false);
+    }
+  };
+
   if (loading) return <Spin size="large" style={{ display: 'block', margin: '100px auto' }} />;
 
   const receivedRequests = requests.filter(r => r.toUser && r.status === 'pending');
@@ -142,6 +162,7 @@ export default function PartnerPage() {
             return (
               <List.Item
                 actions={[
+                  <Button size="small" icon={<BarChartOutlined />} onClick={() => handleViewAnalysis(item.partner.id, item.partner.nickname)}>深度分析</Button>,
                   <Popconfirm title="确定解除伙伴关系？" onConfirm={() => handleRemovePartner(item.partner.id)}>
                     <Button size="small" danger>解除</Button>
                   </Popconfirm>,
@@ -227,6 +248,118 @@ export default function PartnerPage() {
           rows={3}
           maxLength={500}
         />
+      </Modal>
+
+      <Modal
+        title={`与 ${analysisPartnerName} 的深度学习分析`}
+        open={analysisModal}
+        onCancel={() => { setAnalysisModal(false); setAnalysisData(null); }}
+        footer={null}
+        width={720}
+      >
+        {analysisLoading ? (
+          <Spin style={{ display: 'block', margin: '40px auto' }} />
+        ) : analysisData ? (
+          <div>
+            <Row gutter={16} style={{ marginBottom: 16 }}>
+              <Col span={12}>
+                <Card size="small" title="我的学习状态">
+                  <Statistic title="连续打卡" value={analysisData.myStats.streak} suffix="天" />
+                  <Statistic title="本周学习" value={analysisData.myStats.weeklyMinutes} suffix="分钟" />
+                  <Statistic title="活跃课程" value={analysisData.myStats.totalCourses} suffix="门" />
+                </Card>
+              </Col>
+              <Col span={12}>
+                <Card size="small" title={`${analysisPartnerName} 的学习状态`}>
+                  <Statistic title="连续打卡" value={analysisData.partnerStats.streak} suffix="天" />
+                  <Statistic title="本周学习" value={analysisData.partnerStats.weeklyMinutes} suffix="分钟" />
+                  <Statistic title="活跃课程" value={analysisData.partnerStats.totalCourses} suffix="门" />
+                </Card>
+              </Col>
+            </Row>
+
+            {analysisData.sharedCourses.length > 0 && (
+              <>
+                <Divider>共同课程掌握对比</Divider>
+                {analysisData.sharedCourses.map((course: any) => (
+                  <div key={course.courseId} style={{ marginBottom: 12 }}>
+                    <Text strong>{course.courseTitle}</Text>
+                    <Row gutter={16}>
+                      <Col span={12}>
+                        <Text type="secondary">我：</Text>
+                        <Progress percent={Math.round(course.myMastery * 100)} size="small" />
+                      </Col>
+                      <Col span={12}>
+                        <Text type="secondary">{analysisPartnerName}：</Text>
+                        <Progress percent={Math.round(course.partnerMastery * 100)} size="small" />
+                      </Col>
+                    </Row>
+                  </div>
+                ))}
+              </>
+            )}
+
+            {analysisData.complementary.length > 0 && (
+              <>
+                <Divider>互补领域</Divider>
+                <List
+                  size="small"
+                  dataSource={analysisData.complementary}
+                  renderItem={(item: any) => (
+                    <List.Item>
+                      <Tag color={item.strongUser === 'me' ? 'blue' : 'green'}>
+                        {item.strongUser === 'me' ? '我更强' : `${analysisPartnerName}更强`}
+                      </Tag>
+                      <Text>{item.courseTitle}</Text>
+                      <Text type="secondary" style={{ marginLeft: 8 }}>
+                        差距 {Math.round(item.gap * 100)}%
+                      </Text>
+                    </List.Item>
+                  )}
+                />
+              </>
+            )}
+
+            {(analysisData.myStrengths.length > 0 || analysisData.partnerStrengths.length > 0) && (
+              <>
+                <Divider>各自优势</Divider>
+                <Row gutter={16}>
+                  <Col span={12}>
+                    <Text strong>我的优势课程</Text>
+                    {analysisData.myStrengths.map((s: any) => (
+                      <div key={s.courseId}>
+                        <Tag color="blue">{s.courseTitle}</Tag>
+                        <Text type="secondary">{Math.round(s.overallMastery * 100)}%</Text>
+                      </div>
+                    ))}
+                  </Col>
+                  <Col span={12}>
+                    <Text strong>{analysisPartnerName}的优势课程</Text>
+                    {analysisData.partnerStrengths.map((s: any) => (
+                      <div key={s.courseId}>
+                        <Tag color="green">{s.courseTitle}</Tag>
+                        <Text type="secondary">{Math.round(s.overallMastery * 100)}%</Text>
+                      </div>
+                    ))}
+                  </Col>
+                </Row>
+              </>
+            )}
+
+            {analysisData.aiSuggestions && (
+              <>
+                <Divider>AI 协作建议</Divider>
+                <Card size="small" style={{ background: '#f6ffed' }}>
+                  <Paragraph style={{ whiteSpace: 'pre-wrap', margin: 0 }}>
+                    {analysisData.aiSuggestions}
+                  </Paragraph>
+                </Card>
+              </>
+            )}
+          </div>
+        ) : (
+          <Empty description="暂无分析数据" />
+        )}
       </Modal>
     </div>
   );

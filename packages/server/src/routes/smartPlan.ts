@@ -3,7 +3,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { prisma } from '../app';
 import { authenticate } from '../middleware/auth';
 import { analyzeHabits } from '../lib/habitAnalyzer';
-import { generateWeekSchedule } from '../lib/smartScheduler';
+import { generateWeekSchedule, adaptAfterDailyCompletion } from '../lib/smartScheduler';
 
 export const smartPlanRouter = Router();
 smartPlanRouter.use(authenticate);
@@ -182,5 +182,26 @@ smartPlanRouter.post('/adjust', async (req, res, next) => {
     }
 
     res.json({ success: true });
+  } catch (err) { next(err); }
+});
+
+smartPlanRouter.post('/daily-adapt', async (req, res, next) => {
+  try {
+    const userId = req.user!.userId;
+    const { completedItemId, masteryRating, actualDuration } = req.body;
+
+    if (!completedItemId || !masteryRating) {
+      return res.status(400).json({ success: false, error: '缺少 completedItemId 或 masteryRating' });
+    }
+
+    const result = await adaptAfterDailyCompletion(
+      prisma,
+      userId,
+      completedItemId,
+      masteryRating,
+      actualDuration || null
+    );
+
+    res.json({ success: true, data: result });
   } catch (err) { next(err); }
 });

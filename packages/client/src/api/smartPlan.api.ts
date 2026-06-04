@@ -1,5 +1,5 @@
 import apiClient from './client';
-import { ApiResponse, StudyHabitProfile, SmartSchedule } from '@study-platform/shared';
+import { ApiResponse, StudyHabitProfile, SmartSchedule, DailyAdaptResult } from '@study-platform/shared';
 
 export async function getHabitProfile() {
   const res = await apiClient.get<ApiResponse<StudyHabitProfile | null>>('/smart-plan/profile');
@@ -28,4 +28,13 @@ export async function updateScheduleStatus(id: string, status: string) {
 
 export async function adjustSchedule(completedItemId: string) {
   await apiClient.post('/smart-plan/adjust', { completedItemId });
+}
+
+export async function dailyAdapt(completedItemId: string, masteryRating: number, actualDuration?: number) {
+  const res = await apiClient.post<ApiResponse<DailyAdaptResult>>('/smart-plan/daily-adapt', {
+    completedItemId,
+    masteryRating,
+    actualDuration,
+  });
+  return res.data.data!;
 }

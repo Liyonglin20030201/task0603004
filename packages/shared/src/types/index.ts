@@ -483,7 +483,10 @@ export interface TimeSlot {
   planItemId: string;
   planItemTitle: string;
   courseTitle: string;
+  courseId?: string;
   durationMinutes: number;
+  priority?: number;
+  priorityReason?: string;
 }
 
 export interface DaySchedule {
@@ -516,9 +519,11 @@ export interface SyncPushItem {
 
 export interface SyncResult {
   entityId: string;
-  status: 'synced' | 'conflict' | 'error';
+  status: 'synced' | 'conflict' | 'auto_merged' | 'error';
   serverVersion?: number;
   serverData?: any;
+  mergedData?: any;
+  mergeStrategy?: string;
   error?: string;
 }
 
@@ -588,4 +593,49 @@ export interface PartnerProgress {
   currentStreak: number;
   weeklyCheckIns: number;
   weeklyStudyMinutes: number;
+}
+
+// ===== Daily Adapt Types =====
+
+export interface DailyAdaptResult {
+  reorderedSlots: TimeSlot[];
+  adjustmentReason: string;
+  coursePriorityChanges: { courseId: string; courseTitle: string; direction: 'up' | 'down'; reason: string }[];
+}
+
+// ===== Partner Analysis Types =====
+
+export interface CourseStrength {
+  courseId: string;
+  courseTitle: string;
+  completionRate: number;
+  wrongAnswerMastery: number;
+  overallMastery: number;
+}
+
+export interface ComplementaryArea {
+  courseId: string;
+  courseTitle: string;
+  strongUser: 'me' | 'partner';
+  gap: number;
+  myMastery: number;
+  partnerMastery: number;
+}
+
+export interface UserLearningStats {
+  streak: number;
+  weeklyMinutes: number;
+  weeklyCheckIns: number;
+  totalCourses: number;
+  avgSessionMinutes: number;
+}
+
+export interface PartnerAnalysis {
+  myStrengths: CourseStrength[];
+  partnerStrengths: CourseStrength[];
+  complementary: ComplementaryArea[];
+  sharedCourses: { courseId: string; courseTitle: string; myMastery: number; partnerMastery: number }[];
+  myStats: UserLearningStats;
+  partnerStats: UserLearningStats;
+  aiSuggestions: string | null;
 }

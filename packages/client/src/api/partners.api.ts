@@ -1,5 +1,5 @@
 import apiClient from './client';
-import { ApiResponse, PartnerProfile, MatchScore, PartnerRequest, Partnership, PartnerProgress } from '@study-platform/shared';
+import { ApiResponse, PartnerProfile, MatchScore, PartnerRequest, Partnership, PartnerProgress, PartnerAnalysis } from '@study-platform/shared';
 
 export async function getPartnerProfile() {
   const res = await apiClient.get<ApiResponse<PartnerProfile | null>>('/partners/profile');
@@ -42,4 +42,9 @@ export async function getPartnerProgress(userId: string) {
 
 export async function removePartner(userId: string) {
   await apiClient.delete(`/partners/${userId}`);
+}
+
+export async function getPartnerAnalysis(userId: string) {
+  const res = await apiClient.get<ApiResponse<PartnerAnalysis>>(`/partners/${userId}/analysis`);
+  return res.data.data!;
 }
