@@ -4,6 +4,8 @@ import { prisma } from '../app';
 import { authenticate } from '../middleware/auth';
 import { validate } from '../middleware/validate';
 import { AppError } from '../middleware/errorHandler';
+import { redis } from '../lib/redis';
+import { updateGroupGoalProgress } from '../lib/groupGoalProgress';
 
 export const checkinRouter = Router();
 checkinRouter.use(authenticate);
@@ -13,6 +15,18 @@ const createCheckinSchema = z.object({
   durationMinutes: z.number().int().positive().optional(),
   note: z.string().optional(),
 });
+
+function invalidateGroupCaches(userId: string) {
+  prisma.groupMember.findMany({ where: { userId }, select: { groupId: true } })
+    .then(async (memberships: any[]) => {
+      for (const m of memberships) {
+        await redis.del(`group:lb:${m.groupId}`).catch(() => {});
+        await updateGroupGoalProgress(m.groupId).catch((e: any) =>
+          console.error('[CheckIn] Group goal update failed:', m.groupId, e));
+      }
+    })
+    .catch((err: any) => console.error('[CheckIn] Post-checkin side-effects error:', err));
+}
 
 // Create check-in with duplicate prevention
 checkinRouter.post('/', validate(createCheckinSchema), async (req, res, next) => {
@@ -47,6 +61,8 @@ checkinRouter.post('/', validate(createCheckinSchema), async (req, res, next) =>
       });
 
       res.status(201).json({ success: true, data: checkIn });
+
+      invalidateGroupCaches(userId);
     } catch (err: any) {
       // Prisma unique constraint violation
       if (err.code === 'P2002') {
@@ -107,7 +123,7 @@ checkinRouter.get('/streak', async (req, res, next) => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    const dates = checkIns.map(c => {
+    const dates = checkIns.map((c: any) => {
       const d = new Date(c.checkInDate);
       d.setHours(0, 0, 0, 0);
       return d.getTime();
@@ -169,5 +185,7 @@ checkinRouter.delete('/:id', async (req, res, next) => {
     ]);
 
     res.json({ success: true, message: '打卡已撤销' });
+
+    invalidateGroupCaches(req.user!.userId);
   } catch (err) { next(err); }
 });

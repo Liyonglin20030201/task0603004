@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Table, Card, Button, Modal, Form, Input, Select, Tag, Space, message, Popconfirm, Statistic, Row, Col, List, Typography, Badge } from 'antd';
-import { PlusOutlined, DeleteOutlined, EyeOutlined, CheckCircleOutlined, ClockCircleOutlined, BookOutlined, WarningOutlined } from '@ant-design/icons';
+import { Table, Card, Button, Modal, Form, Input, Select, Tag, Space, message, Popconfirm, Statistic, Row, Col, List, Typography, Badge, Progress } from 'antd';
+import { PlusOutlined, DeleteOutlined, EyeOutlined, CheckCircleOutlined, ClockCircleOutlined, BookOutlined, WarningOutlined, ThunderboltOutlined, FrownOutlined, MehOutlined, SmileOutlined, CloseCircleOutlined } from '@ant-design/icons';
 import { getWrongAnswers, createWrongAnswer, updateWrongAnswer, deleteWrongAnswer, getDueWrongAnswers, reviewWrongAnswer, getWrongAnswerStats, WrongAnswerStats } from '../../api/wrongAnswers.api';
 import { getCourses } from '../../api/courses.api';
 
@@ -14,9 +14,9 @@ function getUrgencyColor(nextReviewDate: string | null): string {
   reviewDate.setHours(0, 0, 0, 0);
   const diffDays = Math.floor((reviewDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
 
-  if (diffDays < 0) return '#ff4d4f'; // overdue - red
-  if (diffDays === 0) return '#fa8c16'; // due today - orange
-  return '#52c41a'; // upcoming - green
+  if (diffDays < 0) return '#ff4d4f';
+  if (diffDays === 0) return '#fa8c16';
+  return '#52c41a';
 }
 
 function getUrgencyLabel(nextReviewDate: string | null): string {
@@ -32,6 +32,13 @@ function getUrgencyLabel(nextReviewDate: string | null): string {
   return `${diffDays}天后`;
 }
 
+const RATING_OPTIONS = [
+  { quality: 1, label: '忘记了', desc: '重置间隔', icon: <CloseCircleOutlined />, color: '#ff4d4f', bg: '#fff2f0' },
+  { quality: 3, label: '困难', desc: '1-3天后', icon: <FrownOutlined />, color: '#fa8c16', bg: '#fff7e6' },
+  { quality: 4, label: '一般', desc: '7-14天后', icon: <MehOutlined />, color: '#1890ff', bg: '#e6f7ff' },
+  { quality: 5, label: '简单', desc: '14-30天后', icon: <SmileOutlined />, color: '#52c41a', bg: '#f6ffed' },
+];
+
 export default function WrongAnswerList() {
   const [data, setData] = useState<any[]>([]);
   const [dueItems, setDueItems] = useState<any[]>([]);
@@ -45,6 +52,12 @@ export default function WrongAnswerList() {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [form] = Form.useForm();
+
+  const [sessionMode, setSessionMode] = useState(false);
+  const [sessionItems, setSessionItems] = useState<any[]>([]);
+  const [sessionIndex, setSessionIndex] = useState(0);
+  const [reviewedToday, setReviewedToday] = useState(0);
+  const [selectedRating, setSelectedRating] = useState<number | null>(null);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -60,14 +73,14 @@ export default function WrongAnswerList() {
     try {
       const items = await getDueWrongAnswers();
       setDueItems(items);
-    } catch { /* silent */ }
+    } catch {}
   }, []);
 
   const fetchStats = useCallback(async () => {
     try {
       const s = await getWrongAnswerStats();
       setStats(s);
-    } catch { /* silent */ }
+    } catch {}
   }, []);
 
   useEffect(() => {
@@ -92,21 +105,56 @@ export default function WrongAnswerList() {
   const handleStartReview = (record: any) => {
     setReviewItem(record);
     setShowAnswer(false);
+    setSelectedRating(null);
+    setReviewModalOpen(true);
+  };
+
+  const handleStartSession = () => {
+    if (dueItems.length === 0) return;
+    setSessionMode(true);
+    setSessionItems([...dueItems]);
+    setSessionIndex(0);
+    setReviewItem(dueItems[0]);
+    setShowAnswer(false);
+    setSelectedRating(null);
     setReviewModalOpen(true);
   };
 
   const handleSubmitReview = async (quality: number) => {
     if (!reviewItem) return;
-    try {
-      await reviewWrongAnswer(reviewItem.id, quality);
-      const qualityLabels: Record<number, string> = { 5: '简单', 4: '一般', 3: '困难', 1: '忘记了' };
-      message.success(`已记录复习 - ${qualityLabels[quality] || '已提交'}`);
-      setReviewModalOpen(false);
-      setReviewItem(null);
-      fetchData();
-      fetchDueItems();
-      fetchStats();
-    } catch { message.error('提交复习失败'); }
+    setSelectedRating(quality);
+
+    setTimeout(async () => {
+      try {
+        await reviewWrongAnswer(reviewItem.id, quality);
+        setReviewedToday(prev => prev + 1);
+
+        if (sessionMode) {
+          const nextIdx = sessionIndex + 1;
+          if (nextIdx < sessionItems.length) {
+            setSessionIndex(nextIdx);
+            setReviewItem(sessionItems[nextIdx]);
+            setShowAnswer(false);
+            setSelectedRating(null);
+          } else {
+            setReviewModalOpen(false);
+            setSessionMode(false);
+            setReviewItem(null);
+            message.success(`太棒了！本次复习完成 ${sessionItems.length} 道题`);
+          }
+        } else {
+          setReviewModalOpen(false);
+          setReviewItem(null);
+        }
+
+        fetchData();
+        fetchDueItems();
+        fetchStats();
+      } catch {
+        message.error('提交复习失败');
+      }
+      setSelectedRating(null);
+    }, 300);
   };
 
   const handleDelete = async (id: string) => {
@@ -145,37 +193,43 @@ export default function WrongAnswerList() {
     },
   ];
 
+  const reviewModalTitle = sessionMode
+    ? `复习进度 ${sessionIndex + 1} / ${sessionItems.length}`
+    : '复习错题';
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      {/* Statistics Card */}
       {stats && (
         <Card size="small">
           <Row gutter={16}>
-            <Col span={5}>
+            <Col span={4}>
               <Statistic title="总错题" value={stats.total} prefix={<BookOutlined />} />
             </Col>
-            <Col span={5}>
+            <Col span={4}>
               <Statistic title="今日待复习" value={stats.dueToday} prefix={<ClockCircleOutlined />} valueStyle={{ color: stats.dueToday > 0 ? '#fa8c16' : undefined }} />
             </Col>
-            <Col span={5}>
+            <Col span={4}>
               <Statistic title="已掌握" value={stats.mastered} prefix={<CheckCircleOutlined />} valueStyle={{ color: '#52c41a' }} />
             </Col>
-            <Col span={5}>
+            <Col span={4}>
               <Statistic title="学习中" value={stats.learning} prefix={<ClockCircleOutlined />} valueStyle={{ color: '#1890ff' }} />
             </Col>
             <Col span={4}>
               <Statistic title="新题目" value={stats.newItems} prefix={<WarningOutlined />} valueStyle={{ color: '#ff4d4f' }} />
             </Col>
+            <Col span={4}>
+              <Statistic title="今日已复习" value={reviewedToday} prefix={<ThunderboltOutlined />} valueStyle={{ color: '#722ed1' }} />
+            </Col>
           </Row>
         </Card>
       )}
 
-      {/* Due Today Section */}
       {dueItems.length > 0 && (
         <Card
           title={<span><Badge count={dueItems.length} offset={[10, 0]}><span style={{ fontSize: 16, fontWeight: 500 }}>今日待复习</span></Badge></span>}
           size="small"
           style={{ borderColor: '#fa8c16', borderWidth: 2 }}
+          extra={<Button type="primary" icon={<ThunderboltOutlined />} onClick={handleStartSession}>开始复习会话</Button>}
         >
           <List
             dataSource={dueItems.slice(0, 10)}
@@ -215,7 +269,6 @@ export default function WrongAnswerList() {
         </Card>
       )}
 
-      {/* Main Table */}
       <Card>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
           <span style={{ fontSize: 16, fontWeight: 500 }}>错题本</span>
@@ -227,7 +280,6 @@ export default function WrongAnswerList() {
         />
       </Card>
 
-      {/* Create Modal */}
       <Modal title="添加错题" open={modalOpen} onCancel={() => setModalOpen(false)} onOk={() => form.submit()} okText="添加" width={600}>
         <Form form={form} onFinish={handleCreate} layout="vertical">
           <Form.Item name="courseId" label="课程" rules={[{ required: true, message: '请选择课程' }]}>
@@ -251,16 +303,24 @@ export default function WrongAnswerList() {
         </Form>
       </Modal>
 
-      {/* Review Modal */}
       <Modal
-        title="复习错题"
+        title={reviewModalTitle}
         open={reviewModalOpen}
-        onCancel={() => { setReviewModalOpen(false); setReviewItem(null); }}
+        onCancel={() => { setReviewModalOpen(false); setReviewItem(null); setSessionMode(false); }}
         footer={null}
         width={640}
       >
         {reviewItem && (
           <div>
+            {sessionMode && (
+              <Progress
+                percent={Math.round(((sessionIndex) / sessionItems.length) * 100)}
+                size="small"
+                style={{ marginBottom: 16 }}
+                strokeColor="#722ed1"
+              />
+            )}
+
             <Card style={{ marginBottom: 16, background: '#fafafa' }}>
               <Text strong style={{ fontSize: 16 }}>题目:</Text>
               <Paragraph style={{ marginTop: 8, fontSize: 15 }}>{reviewItem.question}</Paragraph>
@@ -299,41 +359,31 @@ export default function WrongAnswerList() {
                   </Card>
                 )}
 
-                <div style={{ textAlign: 'center', padding: '16px 0', borderTop: '1px solid #f0f0f0' }}>
-                  <Text strong style={{ display: 'block', marginBottom: 12 }}>你对这道题的掌握程度如何？</Text>
-                  <Space size="middle">
-                    <Button
-                      danger
-                      size="large"
-                      onClick={() => handleSubmitReview(1)}
-                    >
-                      忘记了
-                    </Button>
-                    <Button
-                      size="large"
-                      style={{ borderColor: '#fa8c16', color: '#fa8c16' }}
-                      onClick={() => handleSubmitReview(3)}
-                    >
-                      困难
-                    </Button>
-                    <Button
-                      size="large"
-                      style={{ borderColor: '#1890ff', color: '#1890ff' }}
-                      onClick={() => handleSubmitReview(4)}
-                    >
-                      一般
-                    </Button>
-                    <Button
-                      type="primary"
-                      size="large"
-                      style={{ background: '#52c41a', borderColor: '#52c41a' }}
-                      onClick={() => handleSubmitReview(5)}
-                    >
-                      简单
-                    </Button>
-                  </Space>
-                  <div style={{ marginTop: 8 }}>
-                    <Text type="secondary">评分影响下次复习间隔：忘记了(重置) / 困难(正常推进) / 一般(正常推进) / 简单(正常推进)</Text>
+                <div style={{ padding: '16px 0', borderTop: '1px solid #f0f0f0' }}>
+                  <Text strong style={{ display: 'block', marginBottom: 12, textAlign: 'center' }}>你对这道题的掌握程度如何？</Text>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+                    {RATING_OPTIONS.map((opt) => (
+                      <div
+                        key={opt.quality}
+                        onClick={() => handleSubmitReview(opt.quality)}
+                        style={{
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'center',
+                          padding: '16px 8px',
+                          borderRadius: 8,
+                          border: `2px solid ${selectedRating === opt.quality ? opt.color : '#f0f0f0'}`,
+                          background: selectedRating === opt.quality ? opt.bg : '#fafafa',
+                          cursor: 'pointer',
+                          transition: 'all 0.2s ease',
+                          transform: selectedRating === opt.quality ? 'scale(1.05)' : 'scale(1)',
+                        }}
+                      >
+                        <span style={{ fontSize: 24, color: opt.color }}>{opt.icon}</span>
+                        <Text strong style={{ color: opt.color, marginTop: 8 }}>{opt.label}</Text>
+                        <Text type="secondary" style={{ fontSize: 11, marginTop: 4 }}>{opt.desc}</Text>
+                      </div>
+                    ))}
                   </div>
                 </div>
               </>

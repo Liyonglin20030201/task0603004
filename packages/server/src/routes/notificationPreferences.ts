@@ -3,16 +3,24 @@ import { prisma } from '../app';
 import { authenticate } from '../middleware/auth';
 import { sendEmail } from '../lib/emailSender';
 import { sendSms } from '../lib/smsSender';
+import { ensureDefaultPreferences } from '../lib/ensureDefaultPreferences';
 
 export const notificationPreferenceRouter = Router();
 notificationPreferenceRouter.use(authenticate);
 
 notificationPreferenceRouter.get('/', async (req, res, next) => {
   try {
-    const preferences = await prisma.notificationPreference.findMany({
+    let preferences = await prisma.notificationPreference.findMany({
       where: { userId: req.user!.userId },
       orderBy: [{ type: 'asc' }, { channel: 'asc' }],
     });
+    if (preferences.length === 0) {
+      await ensureDefaultPreferences(prisma, req.user!.userId);
+      preferences = await prisma.notificationPreference.findMany({
+        where: { userId: req.user!.userId },
+        orderBy: [{ type: 'asc' }, { channel: 'asc' }],
+      });
+    }
     res.json({ success: true, data: preferences });
   } catch (err) { next(err); }
 });

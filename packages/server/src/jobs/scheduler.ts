@@ -230,8 +230,8 @@ export function startCronJobs() {
     }
   });
 
-  // Every hour - Rebuild group leaderboards in Redis
-  cron.schedule('0 * * * *', async () => {
+  // Every 4 hours - Clear group leaderboard caches (safety net)
+  cron.schedule('0 */4 * * *', async () => {
     try {
       const groups = await prisma.studyGroup.findMany({ select: { id: true } });
       for (const group of groups) {

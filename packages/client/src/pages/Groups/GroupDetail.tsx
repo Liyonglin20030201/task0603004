@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Card, Tabs, Button, List, Avatar, Tag, Space, Table, Typography, Modal, Form, Input, DatePicker, message, Popconfirm, Empty } from 'antd';
+import { Card, Tabs, Button, List, Avatar, Tag, Space, Table, Typography, Modal, Form, Input, DatePicker, InputNumber, Select, Progress, message, Popconfirm, Empty } from 'antd';
 import { TeamOutlined, TrophyOutlined, MessageOutlined, ShareAltOutlined, AimOutlined, DeleteOutlined, CrownOutlined, UserOutlined } from '@ant-design/icons';
 import { getGroup, leaveGroup, deleteGroup, getGroupCheckins, getLeaderboard, getGroupProgress, getSharedItems, getGroupGoals, createGroupGoal, getGroupMessages, sendGroupMessage } from '../../api/groups.api';
 import dayjs from 'dayjs';
@@ -160,10 +160,10 @@ export default function GroupDetail() {
             <Card extra={isAdmin && <Button size="small" type="primary" onClick={() => setGoalModal(true)}>新增目标</Button>}>
               {goals.length === 0 ? <Empty description="暂无小组目标" /> : (
                 <List dataSource={goals} renderItem={(g: any) => (
-                  <List.Item>
+                  <List.Item extra={g.targetType && <Progress type="circle" percent={Math.round((g.progress || 0) * 100)} size={48} />}>
                     <List.Item.Meta
                       title={<Space>{g.title}<Tag color={g.status === 'completed' ? 'green' : 'blue'}>{g.status === 'completed' ? '已完成' : '进行中'}</Tag></Space>}
-                      description={`${g.description || ''} ${g.targetDate ? `· 截止: ${dayjs(g.targetDate).format('YYYY-MM-DD')}` : ''}`}
+                      description={`${g.description || ''}${g.targetDate ? ` · 截止: ${dayjs(g.targetDate).format('YYYY-MM-DD')}` : ''}${g.targetType ? ` · 目标: ${g.targetValue}${g.targetType === 'study_minutes' ? '分钟' : g.targetType === 'checkin_count' ? '次打卡' : '%完成率'}` : ''}`}
                     />
                   </List.Item>
                 )} />
@@ -180,7 +180,7 @@ export default function GroupDetail() {
                   <List.Item>
                     <List.Item.Meta
                       title={item.detail?.title || item.itemId}
-                      description={`${item.itemType === 'course' ? '课程' : '计划'} · 由 ${item.user?.nickname} 分享于 ${dayjs(item.sharedAt).format('MM-DD')}`}
+                      description={`${item.itemType === 'course' ? '课程' : item.itemType === 'plan' ? '计划' : '资源'} · 由 ${item.user?.nickname} 分享于 ${dayjs(item.sharedAt).format('MM-DD')}`}
                     />
                   </List.Item>
                 )} />
@@ -221,6 +221,14 @@ export default function GroupDetail() {
         <Form form={form} layout="vertical">
           <Form.Item name="title" label="目标名称" rules={[{ required: true }]}><Input /></Form.Item>
           <Form.Item name="description" label="描述"><Input.TextArea rows={2} /></Form.Item>
+          <Form.Item name="targetType" label="目标类型">
+            <Select allowClear placeholder="选择量化指标（可选）" options={[
+              { value: 'checkin_count', label: '总打卡次数' },
+              { value: 'study_minutes', label: '总学习分钟数' },
+              { value: 'completion_rate', label: '平均完成率(%)' },
+            ]} />
+          </Form.Item>
+          <Form.Item name="targetValue" label="目标值"><InputNumber min={1} style={{ width: '100%' }} placeholder="如：100次、500分钟、80%" /></Form.Item>
           <Form.Item name="targetDate" label="截止日期"><DatePicker style={{ width: '100%' }} /></Form.Item>
         </Form>
       </Modal>

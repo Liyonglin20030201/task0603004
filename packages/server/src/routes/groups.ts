@@ -232,7 +232,7 @@ groupRouter.post('/:id/share', async (req, res, next) => {
     if (!member) throw new AppError('你不是小组成员', 403);
 
     const { itemType, itemId } = req.body;
-    if (!['course', 'plan'].includes(itemType)) throw new AppError('无效的分享类型', 400);
+    if (!['course', 'plan', 'resource'].includes(itemType)) throw new AppError('无效的分享类型', 400);
 
     const shared = await prisma.groupSharedItem.create({
       data: { groupId: req.params.id, userId: req.user!.userId, itemType, itemId },
@@ -254,8 +254,10 @@ groupRouter.get('/:id/shared', async (req, res, next) => {
       let detail: any = null;
       if (item.itemType === 'course') {
         detail = await prisma.course.findUnique({ where: { id: item.itemId }, select: { id: true, title: true, category: true } });
-      } else {
+      } else if (item.itemType === 'plan') {
         detail = await prisma.learningPlan.findUnique({ where: { id: item.itemId }, select: { id: true, title: true, status: true } });
+      } else if (item.itemType === 'resource') {
+        detail = await prisma.resource.findUnique({ where: { id: item.itemId }, select: { id: true, title: true, fileName: true, fileSize: true, mimeType: true } });
       }
       return { ...item, detail };
     }));
@@ -308,35 +310,57 @@ groupRouter.get('/:id/leaderboard', async (req, res, next) => {
       include: { user: { select: { id: true, nickname: true, avatarUrl: true } } },
     });
 
+    const memberIds = members.map((m: any) => m.userId);
+    if (memberIds.length === 0) {
+      return res.json({ success: true, data: [] });
+    }
+
     const weekAgo = new Date();
     weekAgo.setDate(weekAgo.getDate() - 7);
 
-    const leaderboard = await Promise.all(members.map(async (m: any) => {
-      const weeklyCheckIns = await prisma.checkIn.findMany({
-        where: { userId: m.userId, checkInDate: { gte: weekAgo } },
-      });
-      const weeklyMinutes = weeklyCheckIns.reduce((sum: number, c: any) => sum + (c.durationMinutes || 30), 0);
+    const weeklyStats = await prisma.checkIn.groupBy({
+      by: ['userId'],
+      where: { userId: { in: memberIds }, checkInDate: { gte: weekAgo } },
+      _count: { id: true },
+      _sum: { durationMinutes: true },
+    });
 
-      // Calculate streak
-      const recentCheckIns = await prisma.checkIn.findMany({
-        where: { userId: m.userId },
-        orderBy: { checkInDate: 'desc' },
-        take: 60,
-        select: { checkInDate: true },
-      });
+    const statsMap = new Map<string, { count: number; minutes: number }>(weeklyStats.map((s: any) => [s.userId, {
+      count: s._count.id,
+      minutes: s._sum.durationMinutes || 0,
+    }]));
 
+    const sixtyDaysAgo = new Date();
+    sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
+
+    const recentCheckIns = await prisma.checkIn.findMany({
+      where: { userId: { in: memberIds }, checkInDate: { gte: sixtyDaysAgo } },
+      orderBy: { checkInDate: 'desc' },
+      select: { userId: true, checkInDate: true },
+    });
+
+    const checkInsByUser = new Map<string, Set<string>>();
+    for (const c of recentCheckIns) {
+      if (!checkInsByUser.has(c.userId)) checkInsByUser.set(c.userId, new Set());
+      checkInsByUser.get(c.userId)!.add(c.checkInDate.toISOString().split('T')[0]);
+    }
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const leaderboard = members.map((m: any) => {
+      const stats = statsMap.get(m.userId) || { count: 0, minutes: 0 };
+      const dates = checkInsByUser.get(m.userId);
       let streak = 0;
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const dates = [...new Set(recentCheckIns.map((c: any) => c.checkInDate.toISOString().split('T')[0]))].sort().reverse();
-
-      for (let i = 0; i < dates.length; i++) {
-        const expected = new Date(today);
-        expected.setDate(expected.getDate() - i);
-        if (dates[i] === expected.toISOString().split('T')[0]) {
-          streak++;
-        } else {
-          break;
+      if (dates) {
+        for (let i = 0; i < 60; i++) {
+          const d = new Date(today);
+          d.setDate(d.getDate() - i);
+          if (dates.has(d.toISOString().split('T')[0])) {
+            streak++;
+          } else {
+            break;
+          }
         }
       }
 
@@ -345,16 +369,16 @@ groupRouter.get('/:id/leaderboard', async (req, res, next) => {
         nickname: m.user.nickname,
         avatarUrl: m.user.avatarUrl,
         role: m.role,
-        weeklyMinutes,
-        weeklyCheckIns: weeklyCheckIns.length,
+        weeklyMinutes: stats.minutes,
+        weeklyCheckIns: stats.count,
         streak,
-        score: streak * 100 + weeklyMinutes,
+        score: streak * 100 + stats.minutes,
       };
-    }));
+    });
 
-    leaderboard.sort((a, b) => b.score - a.score);
+    leaderboard.sort((a: any, b: any) => b.score - a.score);
 
-    await redis.set(cacheKey, JSON.stringify(leaderboard), 'EX', 300).catch(() => {});
+    await redis.set(cacheKey, JSON.stringify(leaderboard), 'EX', 900).catch(() => {});
     res.json({ success: true, data: leaderboard });
   } catch (err) { next(err); }
 });
@@ -401,13 +425,15 @@ groupRouter.post('/:id/goals', async (req, res, next) => {
       throw new AppError('只有组长或管理员可以创建小组目标', 403);
     }
 
-    const { title, description, targetDate } = req.body;
+    const { title, description, targetDate, targetType, targetValue } = req.body;
     const goal = await prisma.groupGoal.create({
       data: {
         groupId: req.params.id,
         title,
         description: description || '',
         targetDate: targetDate ? new Date(targetDate) : null,
+        targetType: targetType || null,
+        targetValue: targetValue ? Number(targetValue) : null,
       },
     });
     res.status(201).json({ success: true, data: goal });

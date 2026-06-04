@@ -7,6 +7,7 @@ export interface WrongAnswerStats {
   mastered: number;
   learning: number;
   newItems: number;
+  reviewedToday: number;
 }
 
 export async function getWrongAnswers(params?: { courseId?: string; tag?: string; page?: number }) {

@@ -115,28 +115,31 @@ wrongAnswerRouter.get('/stats', async (req, res, next) => {
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
 
-    const [total, dueToday, mastered, learning] = await Promise.all([
-      // Total wrong answers
+    const [total, dueToday, mastered, learning, reviewedToday] = await Promise.all([
       prisma.wrongAnswer.count({ where: { userId } }),
-      // Due today (nextReviewDate <= end of today)
       prisma.wrongAnswer.count({
         where: {
           userId,
           nextReviewDate: { lte: today },
         },
       }),
-      // Mastered (reviewCount >= 5, meaning interval is 30+ days)
       prisma.wrongAnswer.count({
         where: {
           userId,
           reviewCount: { gte: 5 },
         },
       }),
-      // Learning (reviewCount between 1 and 4)
       prisma.wrongAnswer.count({
         where: {
           userId,
           reviewCount: { gte: 1, lt: 5 },
+        },
+      }),
+      prisma.wrongAnswer.count({
+        where: {
+          userId,
+          updatedAt: { gte: todayStart },
+          reviewCount: { gte: 1 },
         },
       }),
     ]);
@@ -148,7 +151,8 @@ wrongAnswerRouter.get('/stats', async (req, res, next) => {
         dueToday,
         mastered,
         learning,
-        newItems: total - mastered - learning, // items with reviewCount = 0
+        newItems: total - mastered - learning,
+        reviewedToday,
       },
     });
   } catch (err) { next(err); }

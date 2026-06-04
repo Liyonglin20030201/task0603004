@@ -45,7 +45,7 @@ export const getLeaderboard = (groupId: string) =>
 export const getGroupProgress = (groupId: string) =>
   apiClient.get(`/groups/${groupId}/progress`).then((r: any) => r.data);
 
-export const createGroupGoal = (groupId: string, data: { title: string; description?: string; targetDate?: string }) =>
+export const createGroupGoal = (groupId: string, data: { title: string; description?: string; targetDate?: string; targetType?: string; targetValue?: number }) =>
   apiClient.post(`/groups/${groupId}/goals`, data).then((r: any) => r.data);
 
 export const getGroupGoals = (groupId: string) =>

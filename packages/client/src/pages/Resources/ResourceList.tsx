@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Table, Button, Upload, Modal, Form, Input, Switch, Select, Space, Tag, message, Card, Tabs } from 'antd';
 import { UploadOutlined, DownloadOutlined, DeleteOutlined, ShareAltOutlined, SearchOutlined } from '@ant-design/icons';
 import { getResources, getPublicResources, uploadResource, updateResource, deleteResource, downloadResource } from '../../api/resources.api';
+import { getMyGroups, shareItem } from '../../api/groups.api';
 
 export default function ResourceList() {
   const [resources, setResources] = useState<any[]>([]);
@@ -14,6 +15,10 @@ export default function ResourceList() {
   const [editModal, setEditModal] = useState(false);
   const [editItem, setEditItem] = useState<any>(null);
   const [searchText, setSearchText] = useState('');
+  const [shareModal, setShareModal] = useState(false);
+  const [shareResourceId, setShareResourceId] = useState('');
+  const [myGroups, setMyGroups] = useState<any[]>([]);
+  const [shareGroupId, setShareGroupId] = useState('');
   const [form] = Form.useForm();
 
   const fetchResources = async (p = page) => {
@@ -98,6 +103,27 @@ export default function ResourceList() {
     return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
   };
 
+  const handleOpenShare = async (resourceId: string) => {
+    setShareResourceId(resourceId);
+    setShareGroupId('');
+    try {
+      const res = await getMyGroups();
+      setMyGroups(res.data);
+    } catch {}
+    setShareModal(true);
+  };
+
+  const handleShare = async () => {
+    if (!shareGroupId) { message.warning('请选择小组'); return; }
+    try {
+      await shareItem(shareGroupId, { itemType: 'resource', itemId: shareResourceId });
+      message.success('已分享到小组');
+      setShareModal(false);
+    } catch (err: any) {
+      message.error(err.response?.data?.error || '分享失败');
+    }
+  };
+
   const myColumns = [
     { title: '文件名', dataIndex: 'title', key: 'title', ellipsis: true },
     { title: '大小', dataIndex: 'fileSize', key: 'fileSize', width: 100, render: formatSize },
@@ -106,10 +132,11 @@ export default function ResourceList() {
     { title: '下载量', dataIndex: 'downloads', key: 'downloads', width: 80 },
     { title: '公开', dataIndex: 'isPublic', key: 'isPublic', width: 60, render: (v: boolean) => v ? <Tag color="green">是</Tag> : <Tag>否</Tag> },
     {
-      title: '操作', key: 'action', width: 180,
+      title: '操作', key: 'action', width: 220,
       render: (_: any, r: any) => (
         <Space>
           <Button size="small" icon={<DownloadOutlined />} onClick={() => handleDownload(r)} />
+          <Button size="small" icon={<ShareAltOutlined />} onClick={() => handleOpenShare(r.id)} />
           <Button size="small" onClick={() => handleEdit(r)}>编辑</Button>
           <Button size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(r.id)} />
         </Space>
@@ -158,6 +185,16 @@ export default function ResourceList() {
           <Form.Item name="description" label="描述"><Input.TextArea rows={2} /></Form.Item>
           <Form.Item name="isPublic" label="公开分享" valuePropName="checked"><Switch /></Form.Item>
         </Form>
+      </Modal>
+
+      <Modal title="分享到小组" open={shareModal} onOk={handleShare} onCancel={() => setShareModal(false)}>
+        <Select
+          placeholder="选择小组"
+          value={shareGroupId || undefined}
+          onChange={setShareGroupId}
+          style={{ width: '100%' }}
+          options={myGroups.map((g: any) => ({ value: g.id, label: g.name }))}
+        />
       </Modal>
     </div>
   );

@@ -6,6 +6,7 @@ import { authenticate, generateToken, generateRefreshToken, verifyRefreshToken }
 import { validate } from '../middleware/validate';
 import { AppError } from '../middleware/errorHandler';
 import { ApiResponse, AuthResponse, User } from '@study-platform/shared';
+import { ensureDefaultPreferences } from '../lib/ensureDefaultPreferences';
 
 export const authRouter = Router();
 
@@ -33,6 +34,8 @@ authRouter.post('/register', validate(registerSchema), async (req, res, next) =>
     const user = await prisma.user.create({
       data: { email, passwordHash, nickname },
     });
+
+    await ensureDefaultPreferences(prisma, user.id);
 
     const payload = { userId: user.id, role: user.role };
     const token = generateToken(payload);

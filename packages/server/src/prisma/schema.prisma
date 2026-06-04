@@ -453,6 +453,9 @@ model GroupGoal {
   title       String     @db.VarChar(200)
   description String     @default("")
   targetDate  DateTime?  @map("target_date") @db.Date
+  progress    Float      @default(0)
+  targetType  String?    @map("target_type") @db.VarChar(30)
+  targetValue Int?       @map("target_value")
   status      GoalStatus @default(active)
   createdAt   DateTime   @default(now()) @map("created_at")
   updatedAt   DateTime   @updatedAt @map("updated_at")
