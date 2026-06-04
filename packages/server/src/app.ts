@@ -13,6 +13,11 @@ import { statsRouter } from './routes/stats';
 import { calendarRouter } from './routes/calendar';
 import { notificationRouter } from './routes/notifications';
 import { adminRouter } from './routes/admin';
+import { resourceRouter } from './routes/resources';
+import { notificationPreferenceRouter } from './routes/notificationPreferences';
+import { goalRouter } from './routes/goals';
+import { reportRouter } from './routes/reports';
+import { groupRouter } from './routes/groups';
 import { startCronJobs } from './jobs/scheduler';
 
 export const prisma = new PrismaClient();
@@ -33,6 +38,11 @@ app.use('/api/stats', statsRouter);
 app.use('/api/calendar', calendarRouter);
 app.use('/api/notifications', notificationRouter);
 app.use('/api/admin', adminRouter);
+app.use('/api/resources', resourceRouter);
+app.use('/api/notification-preferences', notificationPreferenceRouter);
+app.use('/api/goals', goalRouter);
+app.use('/api/reports', reportRouter);
+app.use('/api/groups', groupRouter);
 
 app.use(errorHandler);
 

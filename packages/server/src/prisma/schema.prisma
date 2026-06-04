@@ -35,6 +35,50 @@ enum NotificationType {
   reminder
   system
   achievement
+  group
+  goal
+}
+
+enum NotificationChannel {
+  in_app
+  email
+  sms
+}
+
+enum GoalType {
+  long_term
+  short_term
+}
+
+enum GoalStatus {
+  active
+  completed
+  abandoned
+}
+
+enum ReportPeriod {
+  monthly
+  quarterly
+  yearly
+}
+
+enum ReportStatus {
+  pending
+  generating
+  completed
+  failed
+}
+
+enum GroupRole {
+  owner
+  admin
+  member
+}
+
+enum GroupJoinPolicy {
+  open
+  approval
+  invite
 }
 
 model User {
@@ -42,20 +86,30 @@ model User {
   email        String   @unique
   passwordHash String   @map("password_hash")
   nickname     String   @db.VarChar(50)
+  phone        String?  @db.VarChar(20)
   avatarUrl    String?  @map("avatar_url")
   role         UserRole @default(user)
   timezone     String   @default("Asia/Shanghai") @db.VarChar(50)
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
-  courses             Course[]
-  learningPlans       LearningPlan[]
-  checkIns            CheckIn[]
-  wrongAnswers        WrongAnswer[]
-  notes               Note[]
-  aiReviewSuggestions AIReviewSuggestion[]
-  notifications       Notification[]
-  systemConfigUpdates SystemConfig[]
+  courses                 Course[]
+  learningPlans           LearningPlan[]
+  checkIns                CheckIn[]
+  wrongAnswers            WrongAnswer[]
+  notes                   Note[]
+  aiReviewSuggestions     AIReviewSuggestion[]
+  notifications           Notification[]
+  systemConfigUpdates     SystemConfig[]
+  resources               Resource[]
+  notificationPreferences NotificationPreference[]
+  learningGoals           LearningGoal[]
+  userBadges              UserBadge[]
+  analysisReports         AnalysisReport[]
+  ownedGroups             StudyGroup[]    @relation("GroupOwner")
+  groupMemberships        GroupMember[]
+  groupSharedItems        GroupSharedItem[]
+  groupMessages           GroupMessage[]
 
   @@map("users")
 }
@@ -75,6 +129,8 @@ model Course {
   wrongAnswers        WrongAnswer[]
   notes               Note[]
   aiReviewSuggestions AIReviewSuggestion[]
+  resources           Resource[]
+  learningGoals       LearningGoal[]
 
   @@index([userId, status])
   @@map("courses")
@@ -95,6 +151,9 @@ model LearningPlan {
   user     User       @relation(fields: [userId], references: [id])
   course   Course     @relation(fields: [courseId], references: [id])
   items    PlanItem[]
+  resources Resource[]
+  goal     LearningGoal? @relation("GoalPlans", fields: [goalId], references: [id])
+  goalId   String?    @map("goal_id")
 
   @@index([userId, status])
   @@index([courseId])
@@ -201,6 +260,7 @@ model Notification {
   title        String           @db.VarChar(200)
   content      String           @default("")
   read         Boolean          @default(false)
+  channel      String           @default("in_app") @db.VarChar(20)
   scheduledFor DateTime?        @map("scheduled_for")
   createdAt    DateTime         @default(now()) @map("created_at")
 
@@ -220,4 +280,199 @@ model SystemConfig {
   updater User @relation(fields: [updatedBy], references: [id])
 
   @@map("system_configs")
+}
+
+model Resource {
+  id          String   @id @default(uuid())
+  userId      String   @map("user_id")
+  title       String   @db.VarChar(200)
+  description String   @default("")
+  fileName    String   @map("file_name") @db.VarChar(255)
+  filePath    String   @map("file_path") @db.VarChar(500)
+  fileSize    Int      @map("file_size")
+  mimeType    String   @map("mime_type") @db.VarChar(100)
+  courseId     String?  @map("course_id")
+  planId      String?  @map("plan_id")
+  downloads   Int      @default(0)
+  isPublic    Boolean  @default(false) @map("is_public")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  user   User          @relation(fields: [userId], references: [id])
+  course Course?       @relation(fields: [courseId], references: [id])
+  plan   LearningPlan? @relation(fields: [planId], references: [id])
+
+  @@index([userId])
+  @@index([courseId])
+  @@index([isPublic])
+  @@map("resources")
+}
+
+model NotificationPreference {
+  id        String              @id @default(uuid())
+  userId    String              @map("user_id")
+  type      NotificationType
+  channel   NotificationChannel
+  enabled   Boolean             @default(true)
+  createdAt DateTime            @default(now()) @map("created_at")
+  updatedAt DateTime            @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@unique([userId, type, channel])
+  @@map("notification_preferences")
+}
+
+model LearningGoal {
+  id          String     @id @default(uuid())
+  userId      String     @map("user_id")
+  title       String     @db.VarChar(200)
+  description String     @default("")
+  type        GoalType
+  status      GoalStatus @default(active)
+  targetDate  DateTime?  @map("target_date") @db.Date
+  progress    Float      @default(0)
+  parentId    String?    @map("parent_id")
+  courseId     String?    @map("course_id")
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
+
+  user     User           @relation(fields: [userId], references: [id])
+  parent   LearningGoal?  @relation("GoalHierarchy", fields: [parentId], references: [id])
+  children LearningGoal[] @relation("GoalHierarchy")
+  course   Course?        @relation(fields: [courseId], references: [id])
+  plans    LearningPlan[] @relation("GoalPlans")
+  badges   UserBadge[]
+
+  @@index([userId, status])
+  @@index([parentId])
+  @@map("learning_goals")
+}
+
+model Badge {
+  id          String   @id @default(uuid())
+  name        String   @unique @db.VarChar(100)
+  description String   @default("")
+  icon        String   @default("") @db.VarChar(100)
+  condition   Json
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  userBadges UserBadge[]
+
+  @@map("badges")
+}
+
+model UserBadge {
+  id       String   @id @default(uuid())
+  userId   String   @map("user_id")
+  badgeId  String   @map("badge_id")
+  goalId   String?  @map("goal_id")
+  earnedAt DateTime @default(now()) @map("earned_at")
+
+  user  User          @relation(fields: [userId], references: [id])
+  badge Badge         @relation(fields: [badgeId], references: [id])
+  goal  LearningGoal? @relation(fields: [goalId], references: [id])
+
+  @@unique([userId, badgeId])
+  @@map("user_badges")
+}
+
+model AnalysisReport {
+  id          String       @id @default(uuid())
+  userId      String       @map("user_id")
+  period      ReportPeriod
+  periodStart DateTime     @map("period_start") @db.Date
+  periodEnd   DateTime     @map("period_end") @db.Date
+  status      ReportStatus @default(pending)
+  reportData  Json?        @map("report_data")
+  aiSummary   String?      @map("ai_summary")
+  generatedAt DateTime?    @map("generated_at")
+  createdAt   DateTime     @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@unique([userId, period, periodStart])
+  @@index([userId])
+  @@map("analysis_reports")
+}
+
+model StudyGroup {
+  id          String          @id @default(uuid())
+  name        String          @db.VarChar(100)
+  description String          @default("")
+  ownerId     String          @map("owner_id")
+  joinPolicy  GroupJoinPolicy @default(open) @map("join_policy")
+  maxMembers  Int             @default(20) @map("max_members")
+  createdAt   DateTime        @default(now()) @map("created_at")
+  updatedAt   DateTime        @updatedAt @map("updated_at")
+
+  owner       User             @relation("GroupOwner", fields: [ownerId], references: [id])
+  members     GroupMember[]
+  sharedItems GroupSharedItem[]
+  goals       GroupGoal[]
+  messages    GroupMessage[]
+
+  @@index([ownerId])
+  @@map("study_groups")
+}
+
+model GroupMember {
+  id       String    @id @default(uuid())
+  groupId  String    @map("group_id")
+  userId   String    @map("user_id")
+  role     GroupRole @default(member)
+  joinedAt DateTime  @default(now()) @map("joined_at")
+
+  group StudyGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user  User       @relation(fields: [userId], references: [id])
+
+  @@unique([groupId, userId])
+  @@index([userId])
+  @@map("group_members")
+}
+
+model GroupSharedItem {
+  id       String   @id @default(uuid())
+  groupId  String   @map("group_id")
+  userId   String   @map("user_id")
+  itemType String   @map("item_type") @db.VarChar(20)
+  itemId   String   @map("item_id")
+  sharedAt DateTime @default(now()) @map("shared_at")
+
+  group StudyGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user  User       @relation(fields: [userId], references: [id])
+
+  @@unique([groupId, itemType, itemId])
+  @@index([groupId])
+  @@map("group_shared_items")
+}
+
+model GroupGoal {
+  id          String     @id @default(uuid())
+  groupId     String     @map("group_id")
+  title       String     @db.VarChar(200)
+  description String     @default("")
+  targetDate  DateTime?  @map("target_date") @db.Date
+  status      GoalStatus @default(active)
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
+
+  group StudyGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@index([groupId])
+  @@map("group_goals")
+}
+
+model GroupMessage {
+  id        String   @id @default(uuid())
+  groupId   String   @map("group_id")
+  userId    String   @map("user_id")
+  content   String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  group StudyGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user  User       @relation(fields: [userId], references: [id])
+
+  @@index([groupId, createdAt])
+  @@map("group_messages")
 }

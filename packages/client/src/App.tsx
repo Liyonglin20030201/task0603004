@@ -17,6 +17,12 @@ import CalendarView from './pages/Calendar/CalendarView';
 import Statistics from './pages/Stats/Statistics';
 import Notifications from './pages/Notifications/Notifications';
 import AdminPanel from './pages/Admin/AdminPanel';
+import ResourceList from './pages/Resources/ResourceList';
+import NotificationSettings from './pages/Settings/NotificationSettings';
+import GoalList from './pages/Goals/GoalList';
+import ReportList from './pages/Reports/ReportList';
+import GroupList from './pages/Groups/GroupList';
+import GroupDetail from './pages/Groups/GroupDetail';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const token = useAuthStore((s) => s.token);
@@ -50,6 +56,12 @@ export default function App() {
                 <Route path="/stats" element={<Statistics />} />
                 <Route path="/notifications" element={<Notifications />} />
                 <Route path="/admin" element={<AdminPanel />} />
+                <Route path="/resources" element={<ResourceList />} />
+                <Route path="/settings/notifications" element={<NotificationSettings />} />
+                <Route path="/goals" element={<GoalList />} />
+                <Route path="/reports" element={<ReportList />} />
+                <Route path="/groups" element={<GroupList />} />
+                <Route path="/groups/:id" element={<GroupDetail />} />
               </Routes>
             </MainLayout>
           </ProtectedRoute>

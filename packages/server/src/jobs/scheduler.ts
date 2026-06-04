@@ -1,5 +1,7 @@
 import cron from 'node-cron';
 import { PrismaClient } from '@prisma/client';
+import { sendNotification } from '../lib/notificationSender';
+import { redis } from '../lib/redis';
 
 const prisma = new PrismaClient();
 
@@ -28,14 +30,14 @@ export function startCronJobs() {
 
       for (const plan of overduePlans) {
         const overdueCount = plan.items.length;
-        await prisma.notification.create({
-          data: {
+        try {
+          await sendNotification({
             userId: plan.userId,
             type: 'reminder',
             title: '学习计划有逾期项目',
             content: `你的计划「${plan.title}」有 ${overdueCount} 个项目逾期未完成，请及时处理延期或完成打卡。`,
-          },
-        });
+          });
+        } catch (e) { console.error('[Cron] Notification failed for user:', plan.userId, e); }
       }
 
       console.log(`[Cron] Processed ${overduePlans.length} overdue plans`);
@@ -71,14 +73,14 @@ export function startCronJobs() {
         });
         if (existing) continue;
 
-        await prisma.notification.create({
-          data: {
+        try {
+          await sendNotification({
             userId: group.userId,
             type: 'reminder',
             title: '错题复习提醒',
             content: `根据艾宾浩斯遗忘曲线，你有 ${count} 道错题到了最佳复习时间，及时复习可以显著提高记忆保持率！`,
-          },
-        });
+          });
+        } catch (e) { console.error('[Cron] Notification failed for user:', group.userId, e); }
       }
 
       console.log(`[Cron] Sent review reminders to ${usersWithDueReviews.length} users`);
@@ -104,7 +106,7 @@ export function startCronJobs() {
         distinct: ['planId'],
       });
 
-      const userIds = [...new Set(usersWithTasks.map(t => t.plan.userId))];
+      const userIds = Array.from(new Set<string>(usersWithTasks.map((t: any) => t.plan.userId)));
 
       for (const userId of userIds) {
         const count = await prisma.planItem.count({
@@ -115,14 +117,14 @@ export function startCronJobs() {
           },
         });
 
-        await prisma.notification.create({
-          data: {
+        try {
+          await sendNotification({
             userId,
             type: 'reminder',
             title: '今日学习提醒',
             content: `今天有 ${count} 个学习任务等待完成，加油！`,
-          },
-        });
+          });
+        } catch (e) { console.error('[Cron] Notification failed for user:', userId, e); }
       }
 
       console.log(`[Cron] Sent reminders to ${userIds.length} users`);
@@ -143,20 +145,129 @@ export function startCronJobs() {
         });
 
         if (checkInCount > 0) {
-          await prisma.notification.create({
-            data: {
+          try {
+            await sendNotification({
               userId: user.id,
               type: 'achievement',
               title: '本周学习总结',
               content: `本周你完成了 ${checkInCount} 次打卡，继续保持！`,
-            },
-          });
+            });
+          } catch (e) { console.error('[Cron] Notification failed for user:', user.id, e); }
         }
       }
 
       console.log(`[Cron] Weekly summaries sent`);
     } catch (err) {
       console.error('[Cron] Error generating weekly summaries:', err);
+    }
+  });
+
+  // Daily at 21:00 - Goal deadline reminders
+  cron.schedule('0 21 * * *', async () => {
+    try {
+      const threeDaysLater = new Date();
+      threeDaysLater.setDate(threeDaysLater.getDate() + 3);
+      threeDaysLater.setHours(23, 59, 59, 999);
+
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      tomorrow.setHours(23, 59, 59, 999);
+
+      const approachingGoals = await prisma.learningGoal.findMany({
+        where: {
+          status: 'active',
+          targetDate: { lte: threeDaysLater, gte: new Date() },
+        },
+      });
+
+      for (const goal of approachingGoals) {
+        const daysLeft = Math.ceil((goal.targetDate!.getTime() - Date.now()) / 86400000);
+        await sendNotification({
+          userId: goal.userId,
+          type: 'goal',
+          title: '目标截止提醒',
+          content: `你的目标「${goal.title}」还有 ${daysLeft} 天到期，当前进度 ${Math.round(goal.progress * 100)}%`,
+        });
+      }
+      console.log(`[Cron] Goal reminders sent: ${approachingGoals.length}`);
+    } catch (err) {
+      console.error('[Cron] Error sending goal reminders:', err);
+    }
+  });
+
+  // Daily at 20:00 - Group daily check-in summary
+  cron.schedule('0 20 * * *', async () => {
+    try {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      const groups = await prisma.studyGroup.findMany({
+        include: { members: { select: { userId: true } } },
+      });
+
+      for (const group of groups) {
+        const memberIds = group.members.map((m: any) => m.userId);
+        const todayCheckIns = await prisma.checkIn.findMany({
+          where: { userId: { in: memberIds }, checkInDate: { gte: today } },
+          select: { userId: true },
+        });
+
+        const checkedInUsers = new Set(todayCheckIns.map((c: any) => c.userId));
+        const checkedCount = checkedInUsers.size;
+
+        for (const memberId of memberIds) {
+          await sendNotification({
+            userId: memberId,
+            type: 'group',
+            title: `小组打卡动态`,
+            content: `「${group.name}」今日 ${checkedCount}/${memberIds.length} 人已打卡${!checkedInUsers.has(memberId) ? '，你还没打卡哦！' : '，继续保持！'}`,
+          });
+        }
+      }
+      console.log(`[Cron] Group summaries sent for ${groups.length} groups`);
+    } catch (err) {
+      console.error('[Cron] Error sending group summaries:', err);
+    }
+  });
+
+  // Every hour - Rebuild group leaderboards in Redis
+  cron.schedule('0 * * * *', async () => {
+    try {
+      const groups = await prisma.studyGroup.findMany({ select: { id: true } });
+      for (const group of groups) {
+        await redis.del(`group:lb:${group.id}`).catch(() => {});
+      }
+      console.log(`[Cron] Cleared ${groups.length} leaderboard caches`);
+    } catch (err) {
+      console.error('[Cron] Error clearing leaderboards:', err);
+    }
+  });
+
+  // 1st of month at 02:00 - Auto-generate monthly reports
+  cron.schedule('0 2 1 * *', async () => {
+    try {
+      const lastMonth = new Date();
+      lastMonth.setMonth(lastMonth.getMonth() - 1);
+      lastMonth.setDate(1);
+      lastMonth.setHours(0, 0, 0, 0);
+
+      const users = await prisma.user.findMany({ select: { id: true } });
+      for (const user of users) {
+        const hasActivity = await prisma.checkIn.count({
+          where: { userId: user.id, checkInDate: { gte: lastMonth } },
+        });
+        if (hasActivity > 0) {
+          await sendNotification({
+            userId: user.id,
+            type: 'system',
+            title: '月度报告已可生成',
+            content: '你上月的学习分析报告已准备就绪，点击查看详情。',
+          });
+        }
+      }
+      console.log(`[Cron] Monthly report notifications sent`);
+    } catch (err) {
+      console.error('[Cron] Error with monthly reports:', err);
     }
   });
 

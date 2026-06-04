@@ -80,6 +80,24 @@ async function main() {
   console.log('Seed data created:');
   console.log(`  Admin: admin@study-platform.com / admin123`);
   console.log(`  User:  demo@study-platform.com / user123`);
+
+  // Seed badges
+  const badges = [
+    { name: '7日连续打卡', description: '连续7天完成打卡', icon: '🔥', condition: { type: 'streak', value: 7 } },
+    { name: '30日连续打卡', description: '连续30天完成打卡', icon: '💪', condition: { type: 'streak', value: 30 } },
+    { name: '首个目标完成', description: '完成第一个学习目标', icon: '🎯', condition: { type: 'goals_completed', value: 1 } },
+    { name: '5个目标完成', description: '累计完成5个学习目标', icon: '⭐', condition: { type: 'goals_completed', value: 5 } },
+    { name: '学习100小时', description: '累计学习时长达到100小时', icon: '📚', condition: { type: 'study_hours', value: 100 } },
+  ];
+
+  for (const badge of badges) {
+    await prisma.badge.upsert({
+      where: { name: badge.name },
+      update: {},
+      create: badge,
+    });
+  }
+  console.log(`  Badges: ${badges.length} seeded`);
 }
 
 main()

@@ -13,6 +13,10 @@ import {
   SettingOutlined,
   LogoutOutlined,
   UserOutlined,
+  TeamOutlined,
+  AimOutlined,
+  LineChartOutlined,
+  CloudUploadOutlined,
 } from '@ant-design/icons';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../../stores/authStore';
@@ -23,13 +27,18 @@ const menuItems = [
   { key: '/dashboard', icon: <DashboardOutlined />, label: '仪表盘' },
   { key: '/courses', icon: <BookOutlined />, label: '课程管理' },
   { key: '/plans', icon: <ScheduleOutlined />, label: '学习计划' },
+  { key: '/goals', icon: <AimOutlined />, label: '学习目标' },
   { key: '/checkin', icon: <CheckCircleOutlined />, label: '每日打卡' },
+  { key: '/groups', icon: <TeamOutlined />, label: '学习小组' },
   { key: '/wrong-answers', icon: <FileTextOutlined />, label: '错题本' },
   { key: '/notes', icon: <FileTextOutlined />, label: '笔记' },
+  { key: '/resources', icon: <CloudUploadOutlined />, label: '资源平台' },
   { key: '/ai-review', icon: <BulbOutlined />, label: 'AI复习建议' },
+  { key: '/reports', icon: <LineChartOutlined />, label: '分析报告' },
   { key: '/calendar', icon: <CalendarOutlined />, label: '日历视图' },
   { key: '/stats', icon: <BarChartOutlined />, label: '进度统计' },
   { key: '/notifications', icon: <BellOutlined />, label: '通知' },
+  { key: '/settings/notifications', icon: <SettingOutlined />, label: '通知设置' },
   { key: '/admin', icon: <SettingOutlined />, label: '后台配置' },
 ];
 

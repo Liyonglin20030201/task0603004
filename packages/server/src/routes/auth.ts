@@ -125,6 +125,7 @@ function mapUser(user: any): User {
   return {
     id: user.id,
     email: user.email,
+    phone: user.phone || null,
     nickname: user.nickname,
     avatarUrl: user.avatarUrl,
     role: user.role,
