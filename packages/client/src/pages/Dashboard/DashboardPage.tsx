@@ -9,6 +9,7 @@ import { useNavigate } from 'react-router-dom';
 import { getStatsOverview, getWeeklyReport, getCourseStats } from '../../api/stats.api';
 import { getPlans } from '../../api/plans.api';
 import { getDueWrongAnswers, getWrongAnswerStats } from '../../api/wrongAnswers.api';
+import { getAlerts } from '../../api/predictions.api';
 
 const { Title, Text } = Typography;
 
@@ -19,6 +20,7 @@ export default function DashboardPage() {
   const [courseStats, setCourseStats] = useState<any[]>([]);
   const [dueReviews, setDueReviews] = useState<any[]>([]);
   const [reviewStats, setReviewStats] = useState<any>(null);
+  const [predictionAlerts, setPredictionAlerts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
@@ -30,12 +32,14 @@ export default function DashboardPage() {
       getCourseStats(false).catch(() => []),
       getDueWrongAnswers().catch(() => []),
       getWrongAnswerStats().catch(() => null),
-    ]).then(([statsData, weekly, plansData, courses, due, rStats]) => {
+      getAlerts(false).catch(() => []),
+    ]).then(([statsData, weekly, plansData, courses, due, rStats, alerts]) => {
       setStats(statsData);
       setWeeklyReport(weekly);
       setCourseStats((courses || []).slice(0, 5));
       setDueReviews((due || []).slice(0, 5));
       setReviewStats(rStats);
+      setPredictionAlerts((alerts || []).filter((a: any) => a.severity !== 'info').slice(0, 3));
 
       const today = new Date().toISOString().slice(0, 10);
       const items: any[] = [];
@@ -74,6 +78,20 @@ export default function DashboardPage() {
           style={{ marginBottom: 16 }}
         />
       )}
+
+      {/* Prediction Alerts */}
+      {predictionAlerts.map((alert: any) => (
+        <Alert
+          key={alert.id}
+          type={alert.severity === 'critical' ? 'error' : 'warning'}
+          showIcon
+          icon={<ExclamationCircleOutlined />}
+          message={alert.title}
+          description={alert.description}
+          action={<Button size="small" onClick={() => navigate('/predictions')}>查看详情</Button>}
+          style={{ marginBottom: 16 }}
+        />
+      ))}
 
       {/* Stats Cards */}
       <Row gutter={[16, 16]}>

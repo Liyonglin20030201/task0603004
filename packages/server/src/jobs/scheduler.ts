@@ -2,6 +2,10 @@ import cron from 'node-cron';
 import { PrismaClient } from '@prisma/client';
 import { sendNotification } from '../lib/notificationSender';
 import { redis } from '../lib/redis';
+import { generatePredictions, DailyDataPoint } from '../lib/predictionEngine';
+import { detectAlerts, computeAlertInputs } from '../lib/alertDetector';
+import { analyzeHabits } from '../lib/habitAnalyzer';
+import { generateWeekSchedule } from '../lib/smartScheduler';
 
 const prisma = new PrismaClient();
 
@@ -268,6 +272,121 @@ export function startCronJobs() {
       console.log(`[Cron] Monthly report notifications sent`);
     } catch (err) {
       console.error('[Cron] Error with monthly reports:', err);
+    }
+  });
+
+  // Daily at 03:00 - Generate learning predictions for active users
+  cron.schedule('0 3 * * *', async () => {
+    try {
+      const weekAgo = new Date(Date.now() - 7 * 86400000);
+      const activeUsers = await prisma.checkIn.groupBy({
+        by: ['userId'],
+        where: { checkInDate: { gte: weekAgo } },
+      });
+
+      for (const { userId } of activeUsers) {
+        try {
+          const sixtyDaysAgo = new Date(Date.now() - 60 * 86400000);
+          const checkIns = await prisma.checkIn.findMany({
+            where: { userId, checkInDate: { gte: sixtyDaysAgo } },
+            select: { checkInDate: true, durationMinutes: true },
+          });
+
+          const studyTimeData: DailyDataPoint[] = [];
+          for (let i = 59; i >= 0; i--) {
+            const d = new Date(Date.now() - i * 86400000);
+            const dateStr = d.toISOString().slice(0, 10);
+            const dayData = checkIns.filter((c: any) => new Date(c.checkInDate).toISOString().slice(0, 10) === dateStr);
+            studyTimeData.push({ date: dateStr, value: dayData.reduce((s: number, c: any) => s + (c.durationMinutes || 0), 0) });
+          }
+
+          const prediction = generatePredictions(studyTimeData, 14, 'study_time');
+          if (prediction.predictions.length > 0) {
+            await prisma.learningPrediction.deleteMany({ where: { userId, type: 'study_time', horizonDays: 14 } });
+            await prisma.learningPrediction.create({
+              data: { userId, type: 'study_time', horizonDays: 14, predictions: prediction.predictions, modelParams: prediction.modelParams },
+            });
+          }
+
+          // Detect alerts
+          const alertInputs = await computeAlertInputs(prisma, userId);
+          const alerts = detectAlerts(alertInputs);
+          if (alerts.length > 0) {
+            await prisma.learningAlert.updateMany({ where: { userId, dismissed: false }, data: { dismissed: true } });
+            for (const alert of alerts) {
+              await prisma.learningAlert.create({
+                data: { userId, severity: alert.severity as any, alertType: alert.alertType, title: alert.title, description: alert.description, triggerData: alert.triggerData },
+              });
+            }
+          }
+        } catch (e) { console.error('[Cron] Prediction failed for user:', userId, e); }
+      }
+      console.log(`[Cron] Predictions generated for ${activeUsers.length} users`);
+    } catch (err) {
+      console.error('[Cron] Error generating predictions:', err);
+    }
+  });
+
+  // Every Monday at 01:00 - Auto-generate weekly smart schedules
+  cron.schedule('0 1 * * 1', async () => {
+    try {
+      const usersWithActivePlans = await prisma.learningPlan.findMany({
+        where: { status: { in: ['active', 'delayed'] } },
+        select: { userId: true },
+        distinct: ['userId'],
+      });
+
+      const weekStart = new Date();
+      weekStart.setHours(0, 0, 0, 0);
+
+      for (const { userId } of usersWithActivePlans) {
+        try {
+          const profile = await prisma.studyHabitProfile.findUnique({ where: { userId } });
+          if (!profile) continue;
+
+          const scheduleData = await generateWeekSchedule(prisma, userId, weekStart);
+          await prisma.smartSchedule.upsert({
+            where: { userId_weekStart: { userId, weekStart } },
+            update: { scheduleData, status: 'draft' },
+            create: { userId, weekStart, scheduleData, status: 'draft' },
+          });
+        } catch (e) { console.error('[Cron] Schedule generation failed for user:', userId, e); }
+      }
+      console.log(`[Cron] Weekly schedules generated for ${usersWithActivePlans.length} users`);
+    } catch (err) {
+      console.error('[Cron] Error generating weekly schedules:', err);
+    }
+  });
+
+  // Daily at 04:00 - Refresh partner profile stats
+  cron.schedule('0 4 * * *', async () => {
+    try {
+      const profiles = await prisma.partnerProfile.findMany({ where: { isSearching: true } });
+      for (const profile of profiles) {
+        try {
+          const habits = await analyzeHabits(prisma, profile.userId);
+          await prisma.studyHabitProfile.upsert({
+            where: { userId: profile.userId },
+            update: { weeklyStudyMinutes: habits.weeklyStudyMinutes, lastUpdated: new Date() },
+            create: { userId: profile.userId, bestHours: habits.bestHours, bestDaysOfWeek: habits.bestDaysOfWeek, avgSessionMinutes: habits.avgSessionMinutes, preferredFrequency: habits.preferredFrequency, peakProductivityHour: habits.peakProductivityHour, weeklyStudyMinutes: habits.weeklyStudyMinutes },
+          });
+
+          const lastCheckIn = await prisma.checkIn.findFirst({
+            where: { userId: profile.userId },
+            orderBy: { createdAt: 'desc' },
+            select: { createdAt: true },
+          });
+          if (lastCheckIn) {
+            await prisma.partnerProfile.update({
+              where: { userId: profile.userId },
+              data: { lastActive: lastCheckIn.createdAt },
+            });
+          }
+        } catch (e) { console.error('[Cron] Partner refresh failed for:', profile.userId, e); }
+      }
+      console.log(`[Cron] Partner profiles refreshed: ${profiles.length}`);
+    } catch (err) {
+      console.error('[Cron] Error refreshing partner profiles:', err);
     }
   });
 

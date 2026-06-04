@@ -23,6 +23,10 @@ import GoalList from './pages/Goals/GoalList';
 import ReportList from './pages/Reports/ReportList';
 import GroupList from './pages/Groups/GroupList';
 import GroupDetail from './pages/Groups/GroupDetail';
+import PredictionDashboard from './pages/Predictions/PredictionDashboard';
+import SmartPlanPage from './pages/SmartPlan/SmartPlanPage';
+import PartnerPage from './pages/Partners/PartnerPage';
+import SyncPage from './pages/Sync/SyncPage';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const token = useAuthStore((s) => s.token);
@@ -62,6 +66,10 @@ export default function App() {
                 <Route path="/reports" element={<ReportList />} />
                 <Route path="/groups" element={<GroupList />} />
                 <Route path="/groups/:id" element={<GroupDetail />} />
+                <Route path="/predictions" element={<PredictionDashboard />} />
+                <Route path="/smart-plan" element={<SmartPlanPage />} />
+                <Route path="/partners" element={<PartnerPage />} />
+                <Route path="/sync" element={<SyncPage />} />
               </Routes>
             </MainLayout>
           </ProtectedRoute>

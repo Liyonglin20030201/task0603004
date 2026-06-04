@@ -14,10 +14,11 @@
     "antd": "^5.17.0",
     "axios": "^1.6.8",
     "dayjs": "^1.11.11",
+    "idb": "^8.0.3",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "react-router-dom": "^6.23.1",
     "react-quill": "^2.0.0",
+    "react-router-dom": "^6.23.1",
     "recharts": "^2.12.7",
     "zustand": "^4.5.2"
   },

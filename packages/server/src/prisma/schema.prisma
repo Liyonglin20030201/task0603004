@@ -81,6 +81,33 @@ enum GroupJoinPolicy {
   invite
 }
 
+enum PredictionType {
+  completion_rate
+  study_time
+  engagement
+  retention
+}
+
+enum AlertSeverity {
+  info
+  warning
+  critical
+}
+
+enum SmartPlanStatus {
+  draft
+  active
+  completed
+  expired
+}
+
+enum PartnerRequestStatus {
+  pending
+  accepted
+  rejected
+  cancelled
+}
+
 model User {
   id           String   @id @default(uuid())
   email        String   @unique
@@ -110,6 +137,17 @@ model User {
   groupMemberships        GroupMember[]
   groupSharedItems        GroupSharedItem[]
   groupMessages           GroupMessage[]
+  learningPredictions     LearningPrediction[]
+  learningAlerts          LearningAlert[]
+  studyHabitProfile       StudyHabitProfile?
+  smartSchedules          SmartSchedule[]
+  syncLogs                SyncLog[]
+  offlineQueues           OfflineQueue[]
+  partnerProfile          PartnerProfile?
+  sentPartnerRequests     PartnerRequest[] @relation("SentRequests")
+  receivedPartnerRequests PartnerRequest[] @relation("ReceivedRequests")
+  partnerships1           Partnership[]    @relation("Partnerships1")
+  partnerships2           Partnership[]    @relation("Partnerships2")
 
   @@map("users")
 }
@@ -187,6 +225,7 @@ model CheckIn {
   checkInDate     DateTime @map("check_in_date") @db.Date
   durationMinutes Int?     @map("duration_minutes")
   note            String?
+  version         Int      @default(1)
   createdAt       DateTime @default(now()) @map("created_at")
 
   user     User     @relation(fields: [userId], references: [id])
@@ -208,6 +247,7 @@ model WrongAnswer {
   tags           String[]  @default([])
   reviewCount    Int       @default(0) @map("review_count")
   nextReviewDate DateTime? @map("next_review_date") @db.Date
+  version        Int       @default(1)
   createdAt      DateTime  @default(now()) @map("created_at")
   updatedAt      DateTime  @updatedAt @map("updated_at")
 
@@ -227,6 +267,7 @@ model Note {
   title      String   @db.VarChar(200)
   content    String   @default("")
   tags       String[] @default([])
+  version    Int      @default(1)
   createdAt  DateTime @default(now()) @map("created_at")
   updatedAt  DateTime @updatedAt @map("updated_at")
 
@@ -478,4 +519,169 @@ model GroupMessage {
 
   @@index([groupId, createdAt])
   @@map("group_messages")
+}
+
+// ===== Feature 1: Learning Data Prediction =====
+
+model LearningPrediction {
+  id          String         @id @default(uuid())
+  userId      String         @map("user_id")
+  type        PredictionType
+  horizonDays Int            @map("horizon_days")
+  predictions Json
+  modelParams Json?          @map("model_params")
+  aiComment   String?        @map("ai_comment")
+  createdAt   DateTime       @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId, type])
+  @@map("learning_predictions")
+}
+
+model LearningAlert {
+  id          String        @id @default(uuid())
+  userId      String        @map("user_id")
+  severity    AlertSeverity
+  alertType   String        @map("alert_type") @db.VarChar(50)
+  title       String        @db.VarChar(200)
+  description String        @default("")
+  dismissed   Boolean       @default(false)
+  triggerData Json?         @map("trigger_data")
+  createdAt   DateTime      @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId, dismissed])
+  @@map("learning_alerts")
+}
+
+// ===== Feature 2: Smart Learning Path Planning =====
+
+model StudyHabitProfile {
+  id                   String   @id @default(uuid())
+  userId               String   @unique @map("user_id")
+  bestHours            Int[]    @map("best_hours")
+  bestDaysOfWeek       Int[]    @map("best_days_of_week")
+  avgSessionMinutes    Int      @map("avg_session_minutes")
+  preferredFrequency   Int      @map("preferred_frequency")
+  peakProductivityHour Int      @map("peak_productivity_hour")
+  weeklyStudyMinutes   Int      @default(0) @map("weekly_study_minutes")
+  analysisData         Json?    @map("analysis_data")
+  lastUpdated          DateTime @default(now()) @map("last_updated")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("study_habit_profiles")
+}
+
+model SmartSchedule {
+  id           String          @id @default(uuid())
+  userId       String          @map("user_id")
+  weekStart    DateTime        @map("week_start") @db.Date
+  status       SmartPlanStatus @default(draft)
+  scheduleData Json            @map("schedule_data")
+  adjustments  Json?
+  aiExplanation String?        @map("ai_explanation")
+  createdAt    DateTime        @default(now()) @map("created_at")
+  updatedAt    DateTime        @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@unique([userId, weekStart])
+  @@index([userId])
+  @@map("smart_schedules")
+}
+
+// ===== Feature 3: Multi-device Sync =====
+
+model SyncLog {
+  id         String   @id @default(uuid())
+  userId     String   @map("user_id")
+  deviceId   String   @map("device_id") @db.VarChar(100)
+  syncType   String   @map("sync_type") @db.VarChar(20)
+  entityType String   @map("entity_type") @db.VarChar(30)
+  entityId   String   @map("entity_id")
+  payload    Json
+  syncedAt   DateTime @default(now()) @map("synced_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId, deviceId])
+  @@index([userId, syncedAt])
+  @@map("sync_logs")
+}
+
+model OfflineQueue {
+  id           String    @id @default(uuid())
+  userId       String    @map("user_id")
+  deviceId     String    @map("device_id") @db.VarChar(100)
+  action       String    @db.VarChar(20)
+  entityType   String    @map("entity_type") @db.VarChar(30)
+  entityId     String?   @map("entity_id")
+  payload      Json
+  status       String    @default("pending") @db.VarChar(20)
+  conflictData Json?     @map("conflict_data")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  processedAt  DateTime? @map("processed_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId, status])
+  @@map("offline_queue")
+}
+
+// ===== Feature 4: Learning Partner Matching =====
+
+model PartnerProfile {
+  id               String   @id @default(uuid())
+  userId           String   @unique @map("user_id")
+  isSearching      Boolean  @default(true) @map("is_searching")
+  bio              String   @default("") @db.VarChar(500)
+  studyPreferences Json?    @map("study_preferences")
+  courseIds         String[] @map("course_ids")
+  goalKeywords     String[] @map("goal_keywords")
+  availableHours   Int[]    @map("available_hours")
+  lastActive       DateTime @default(now()) @map("last_active")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([isSearching])
+  @@map("partner_profiles")
+}
+
+model PartnerRequest {
+  id         String               @id @default(uuid())
+  fromUserId String               @map("from_user_id")
+  toUserId   String               @map("to_user_id")
+  status     PartnerRequestStatus @default(pending)
+  message    String?              @db.VarChar(300)
+  score      Float                @default(0)
+  createdAt  DateTime             @default(now()) @map("created_at")
+  updatedAt  DateTime             @updatedAt @map("updated_at")
+
+  fromUser User @relation("SentRequests", fields: [fromUserId], references: [id])
+  toUser   User @relation("ReceivedRequests", fields: [toUserId], references: [id])
+
+  @@unique([fromUserId, toUserId])
+  @@index([toUserId, status])
+  @@map("partner_requests")
+}
+
+model Partnership {
+  id        String   @id @default(uuid())
+  user1Id   String   @map("user1_id")
+  user2Id   String   @map("user2_id")
+  isActive  Boolean  @default(true) @map("is_active")
+  startedAt DateTime @default(now()) @map("started_at")
+
+  user1 User @relation("Partnerships1", fields: [user1Id], references: [id])
+  user2 User @relation("Partnerships2", fields: [user2Id], references: [id])
+
+  @@unique([user1Id, user2Id])
+  @@index([user1Id, isActive])
+  @@index([user2Id, isActive])
+  @@map("partnerships")
 }
