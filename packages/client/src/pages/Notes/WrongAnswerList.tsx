@@ -129,6 +129,9 @@ export default function WrongAnswerList() {
         await reviewWrongAnswer(reviewItem.id, quality);
         setReviewedToday(prev => prev + 1);
 
+        // Immediately remove from due list
+        setDueItems(prev => prev.filter(item => item.id !== reviewItem.id));
+
         if (sessionMode) {
           const nextIdx = sessionIndex + 1;
           if (nextIdx < sessionItems.length) {

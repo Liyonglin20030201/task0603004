@@ -4,6 +4,7 @@ import { authenticate } from '../middleware/auth';
 import { AppError } from '../middleware/errorHandler';
 import { redis } from '../lib/redis';
 import { sendNotification } from '../lib/notificationSender';
+import { updateGroupGoalProgress } from '../lib/groupGoalProgress';
 
 export const groupRouter = Router();
 groupRouter.use(authenticate);
@@ -171,6 +172,7 @@ groupRouter.post('/:id/join', async (req, res, next) => {
       content: `有新成员加入了你的小组「${group.name}」`,
     });
 
+    await redis.del(`group:lb:${group.id}`).catch(() => {});
     res.json({ success: true, message: '已加入小组' });
   } catch (err) { next(err); }
 });
@@ -185,6 +187,7 @@ groupRouter.post('/:id/leave', async (req, res, next) => {
     await prisma.groupMember.delete({
       where: { groupId_userId: { groupId: group.id, userId: req.user!.userId } },
     });
+    await redis.del(`group:lb:${group.id}`).catch(() => {});
     res.json({ success: true, message: '已退出小组' });
   } catch (err) { next(err); }
 });
@@ -202,6 +205,7 @@ groupRouter.delete('/:id/members/:userId', async (req, res, next) => {
     await prisma.groupMember.delete({
       where: { groupId_userId: { groupId: req.params.id, userId: req.params.userId } },
     });
+    await redis.del(`group:lb:${req.params.id}`).catch(() => {});
     res.json({ success: true, message: '成员已移除' });
   } catch (err) { next(err); }
 });
@@ -426,7 +430,7 @@ groupRouter.post('/:id/goals', async (req, res, next) => {
     }
 
     const { title, description, targetDate, targetType, targetValue } = req.body;
-    const goal = await prisma.groupGoal.create({
+    let goal = await prisma.groupGoal.create({
       data: {
         groupId: req.params.id,
         title,
@@ -436,6 +440,13 @@ groupRouter.post('/:id/goals', async (req, res, next) => {
         targetValue: targetValue ? Number(targetValue) : null,
       },
     });
+
+    // Immediately calculate initial progress based on existing member data
+    if (targetType && targetValue) {
+      await updateGroupGoalProgress(req.params.id).catch(() => {});
+      goal = await prisma.groupGoal.findUnique({ where: { id: goal.id } }) || goal;
+    }
+
     res.status(201).json({ success: true, data: goal });
   } catch (err) { next(err); }
 });

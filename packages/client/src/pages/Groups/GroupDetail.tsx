@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Card, Tabs, Button, List, Avatar, Tag, Space, Table, Typography, Modal, Form, Input, DatePicker, InputNumber, Select, Progress, message, Popconfirm, Empty } from 'antd';
-import { TeamOutlined, TrophyOutlined, MessageOutlined, ShareAltOutlined, AimOutlined, DeleteOutlined, CrownOutlined, UserOutlined } from '@ant-design/icons';
+import { TeamOutlined, TrophyOutlined, MessageOutlined, ShareAltOutlined, AimOutlined, DeleteOutlined, CrownOutlined, UserOutlined, DownloadOutlined } from '@ant-design/icons';
 import { getGroup, leaveGroup, deleteGroup, getGroupCheckins, getLeaderboard, getGroupProgress, getSharedItems, getGroupGoals, createGroupGoal, getGroupMessages, sendGroupMessage } from '../../api/groups.api';
+import { downloadResource } from '../../api/resources.api';
 import dayjs from 'dayjs';
 
 const { Title, Text } = Typography;
@@ -85,6 +86,22 @@ export default function GroupDetail() {
     setGoalModal(false);
     form.resetFields();
     fetchGoals();
+  };
+
+  const handleDownloadResource = async (resourceId: string, fileName: string) => {
+    try {
+      const res = await downloadResource(resourceId);
+      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName || 'download';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch {
+      message.error('下载失败');
+    }
   };
 
   if (!group) return null;
@@ -177,10 +194,12 @@ export default function GroupDetail() {
             <Card>
               {sharedItems.length === 0 ? <Empty description="暂无共享内容" /> : (
                 <List dataSource={sharedItems} renderItem={(item: any) => (
-                  <List.Item>
+                  <List.Item actions={item.itemType === 'resource' && item.detail ? [
+                    <Button size="small" icon={<DownloadOutlined />} onClick={() => handleDownloadResource(item.itemId, item.detail.fileName)}>下载</Button>
+                  ] : undefined}>
                     <List.Item.Meta
                       title={item.detail?.title || item.itemId}
-                      description={`${item.itemType === 'course' ? '课程' : item.itemType === 'plan' ? '计划' : '资源'} · 由 ${item.user?.nickname} 分享于 ${dayjs(item.sharedAt).format('MM-DD')}`}
+                      description={`${item.itemType === 'course' ? '课程' : item.itemType === 'plan' ? '计划' : '资源'} · 由 ${item.user?.nickname} 分享于 ${dayjs(item.sharedAt).format('MM-DD')}${item.itemType === 'resource' && item.detail?.fileSize ? ` · ${(item.detail.fileSize / 1024 / 1024).toFixed(1)}MB` : ''}`}
                     />
                   </List.Item>
                 )} />
